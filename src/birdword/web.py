@@ -78,6 +78,8 @@ def create_app(daemon=None) -> Flask:
     @app.route("/")
     def index():
         s = stats()
+        total_mins = s["total_seconds"] / 60
+        wpm = round(s["total_words"] / total_mins) if total_mins > 0 else 0
         return render_template(
             "index.html",
             transcriptions=recent(limit=50),
@@ -89,6 +91,7 @@ def create_app(daemon=None) -> Flask:
             total_words=f"{s['total_words']:,}",
             total_time=_format_duration(s["total_seconds"]),
             total_transcriptions=f"{s['total_transcriptions']:,}",
+            wpm=f"{wpm:,}",
         )
 
     @app.route("/icon.svg")
