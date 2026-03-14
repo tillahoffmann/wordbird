@@ -3,16 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>🐦 Birdword</title>
+<title>Birdword</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
   :root { --pico-font-size: 16px; }
   body { padding: 0; }
   .container { max-width: 800px; }
   header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; margin-bottom: 1rem; }
   header h1 { margin: 0; font-size: 1.5rem; }
-  .gear-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; border-radius: 8px; }
-  .gear-btn:hover { background: var(--pico-card-background-color); }
+  .gear-btn { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 0.5rem; border-radius: 8px; color: var(--pico-muted-color); }
+  .gear-btn:hover { background: var(--pico-card-background-color); color: var(--pico-color); }
   .transcript-list { display: flex; flex-direction: column; gap: 0.5rem; }
   .transcript { padding: 1rem; border-radius: 8px; background: var(--pico-card-background-color); }
   .transcript .meta { font-size: 0.8rem; color: var(--pico-muted-color); margin-bottom: 0.4rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
@@ -40,30 +41,34 @@
   .stat { text-align: center; }
   .stat .value { font-size: 1.4rem; font-weight: 700; color: var(--pico-primary); }
   .stat .label { font-size: 0.75rem; color: var(--pico-muted-color); text-transform: uppercase; }
+  .stat i { margin-right: 0.3rem; font-size: 0.8rem; }
   .transcript .actions { float: right; }
-  .copy-btn { background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--pico-muted-color); padding: 0.2rem 0.4rem; border-radius: 4px; }
+  .copy-btn { background: none; border: none; cursor: pointer; font-size: 0.85rem; color: var(--pico-muted-color); padding: 0.2rem 0.5rem; border-radius: 4px; }
   .copy-btn:hover { background: var(--pico-card-background-color); color: var(--pico-color); }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
 </style>
 </head>
 <body>
 <main class="container">
   <header>
     <h1><img src="/icon.svg" class="logo" alt="Birdword">Birdword</h1>
-    <button class="gear-btn" onclick="document.getElementById('settings-modal').showModal()" title="Settings">⚙️</button>
+    <button class="gear-btn" onclick="document.getElementById('settings-modal').showModal()" title="Settings">
+      <i class="fa-solid fa-gear"></i>
+    </button>
   </header>
 
   <div class="stats-bar">
     <div class="stat">
       <div class="value">{{ total_words }}</div>
-      <div class="label">Words</div>
+      <div class="label"><i class="fa-solid fa-font"></i> Words</div>
     </div>
     <div class="stat">
       <div class="value">{{ total_time }}</div>
-      <div class="label">Recording time</div>
+      <div class="label"><i class="fa-solid fa-clock"></i> Recording</div>
     </div>
     <div class="stat">
       <div class="value">{{ total_transcriptions }}</div>
-      <div class="label">Transcriptions</div>
+      <div class="label"><i class="fa-solid fa-microphone"></i> Sessions</div>
     </div>
   </div>
 
@@ -72,7 +77,9 @@
     {% for t in transcriptions %}
     <div class="transcript">
       <div class="actions">
-        <button class="copy-btn" onclick="copyText(this)" data-text="{{ (t.fixed_text or t.raw_text) | e }}" title="Copy to clipboard">📋</button>
+        <button class="copy-btn" onclick="copyText(this)" data-text="{{ (t.fixed_text or t.raw_text) | e }}" title="Copy to clipboard">
+          <i class="fa-regular fa-copy"></i>
+        </button>
       </div>
       <div class="meta">
         <span>{{ t.timestamp[:16] | replace("T", " ") }}</span>
@@ -83,7 +90,7 @@
       <div class="text">{{ t.fixed_text or t.raw_text }}</div>
       {% if t.fixed_text and t.fixed_text != t.raw_text %}
       <details class="original">
-        <summary>Show original</summary>
+        <summary><i class="fa-solid fa-eye"></i> Show original</summary>
         {{ t.raw_text }}
       </details>
       {% endif %}
@@ -91,23 +98,23 @@
     {% endfor %}
     {% else %}
     <div class="empty">
-      <div class="icon">🎤</div>
+      <div class="icon"><i class="fa-solid fa-microphone"></i></div>
       <p>No transcriptions yet.</p>
       <p><small>Press your hotkey to start dictating.</small></p>
     </div>
     {% endif %}
   </div>
 
-  <dialog id="settings-modal">
+  <dialog id="settings-modal" onclick="if(event.target===this)this.close()">
     <article>
       <header>
         <button aria-label="Close" rel="prev" onclick="document.getElementById('settings-modal').close()"></button>
-        <h3>Settings</h3>
+        <h3><i class="fa-solid fa-gear"></i> Settings</h3>
       </header>
       <div class="body">
         <form id="settings-form">
           <div class="form-group">
-            <label for="hold_key">Hold key</label>
+            <label for="hold_key"><i class="fa-solid fa-keyboard"></i> Hold key</label>
             <select name="hold_key" id="hold_key">
               {% for k in hold_keys %}
               <option value="{{ k }}" {{ 'selected' if config.hold_key == k else '' }}>{{ key_labels[k] }} ({{ k }})</option>
@@ -115,7 +122,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="toggle_key">Toggle key</label>
+            <label for="toggle_key"><i class="fa-solid fa-keyboard"></i> Toggle key</label>
             <select name="toggle_key" id="toggle_key">
               {% for k in toggle_keys %}
               <option value="{{ k }}" {{ 'selected' if config.toggle_key == k else '' }}>{{ key_labels[k] }} ({{ k }})</option>
@@ -123,11 +130,11 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="transcription_model">Transcription model</label>
+            <label for="transcription_model"><i class="fa-solid fa-brain"></i> Transcription model</label>
             <input type="text" name="transcription_model" id="transcription_model" value="{{ config.transcription_model }}">
           </div>
           <div class="form-group">
-            <label for="fix_model">Post-processing model</label>
+            <label for="fix_model"><i class="fa-solid fa-wand-magic-sparkles"></i> Post-processing model</label>
             <input type="text" name="fix_model" id="fix_model" value="{{ config.fix_model }}">
           </div>
           <div class="checkbox-group">
@@ -137,7 +144,7 @@
         </form>
       </div>
       <footer>
-        <button onclick="saveSettings()">Save</button>
+        <button onclick="saveSettings()"><i class="fa-solid fa-check"></i> Save</button>
       </footer>
     </article>
   </dialog>
@@ -155,7 +162,7 @@ function showToast(msg) {
 
 function copyText(btn) {
   navigator.clipboard.writeText(btn.dataset.text).then(() => {
-    showToast('✓ Copied');
+    showToast('Copied');
   }).catch(() => showToast('Failed to copy'));
 }
 
@@ -167,7 +174,7 @@ function saveSettings() {
     body: data,
   }).then(r => r.json()).then(d => {
     if (d.ok) {
-      showToast('✓ Saved and applied');
+      showToast('Saved and applied');
       document.getElementById('settings-modal').close();
     }
   }).catch(() => showToast('Failed to save'));
