@@ -7,13 +7,17 @@
   "homepage": "https://github.com/tillahoffmann/birdword",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tillahoffmann/birdword"
+    "url": "https://github.com/tillahoffmann/birdword.git"
   },
   "bugs": {
     "url": "https://github.com/tillahoffmann/birdword/issues"
   },
   "license": "MIT",
   "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#FFCC00",
+    "theme": "light"
+  },
   "keywords": [
     "dictation",
     "speech-to-text",
@@ -21,6 +25,7 @@
     "voice",
     "accessibility"
   ],
+  "qna": false,
   "engines": {
     "vscode": "^1.85.0"
   },
