@@ -147,6 +147,11 @@ class MenuBar(AppKit.NSObject):
         if state_item is not None:
             state_item.setTitle_(label)
 
+    def reinstallSignalHandler_(self, timer):
+        """Called by NSTimer to re-register SIGINT after app.run() starts."""
+        if hasattr(self, '_sigint_callback') and self._sigint_callback:
+            self._sigint_callback()
+
     def openDashboard_(self, sender):
         """Open the web dashboard in the browser."""
         from birdword.web import open_dashboard

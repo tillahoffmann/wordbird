@@ -4,6 +4,7 @@ import signal
 import threading
 
 import AppKit
+import Foundation
 import Quartz
 
 from birdword.history import record as record_transcription
@@ -336,5 +337,15 @@ class Daemon:
 
         signal.signal(signal.SIGTERM, _handle_shutdown)
         signal.signal(signal.SIGINT, _handle_shutdown)
+
+        # NSApplication.run() overrides SIGINT on start, so re-register
+        # our handler shortly after the run loop begins
+        def _reinstall_sigint():
+            signal.signal(signal.SIGINT, _handle_shutdown)
+
+        timer = Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            0.1, self.menubar, "reinstallSignalHandler:", None, False
+        )
+        self.menubar._sigint_callback = _reinstall_sigint
 
         app.run()
