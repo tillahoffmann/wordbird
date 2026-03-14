@@ -1,20 +1,32 @@
 {
   "name": "birdword",
   "displayName": "Birdword",
-  "description": "Context bridge for Birdword voice dictation",
+  "description": "Context bridge for Birdword voice dictation — connects your workspace to local speech-to-text",
   "version": "0.1.0",
   "publisher": "tillahoffmann",
+  "homepage": "https://github.com/tillahoffmann/birdword",
   "repository": {
     "type": "git",
     "url": "https://github.com/tillahoffmann/birdword"
   },
+  "bugs": {
+    "url": "https://github.com/tillahoffmann/birdword/issues"
+  },
   "license": "MIT",
   "icon": "icon.png",
+  "keywords": [
+    "dictation",
+    "speech-to-text",
+    "transcription",
+    "voice",
+    "accessibility"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Machine Learning"
   ],
   "extensionKind": [
     "ui"
