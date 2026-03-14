@@ -9,12 +9,19 @@
     "url": "https://github.com/tillahoffmann/birdword"
   },
   "license": "MIT",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
-  "extensionKind": ["ui"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "scripts": {
     "build": "tsc",
@@ -23,8 +30,9 @@
     "publish": "vsce publish"
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
     "@types/vscode": "^1.85.0",
-    "typescript": "^5.3.0",
-    "@vscode/vsce": "^3.0.0"
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.3.0"
   }
 }
