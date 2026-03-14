@@ -40,6 +40,7 @@ class Recorder:
         self._device_id: int | None = None
         self._level: float = 0.0  # current audio RMS level (0.0 - 1.0)
         self._mic_ready = False  # True once first non-zero audio arrives
+        self._speech_start_sample: int = 0  # sample index when mic became ready
 
     @property
     def is_recording(self) -> bool:
@@ -114,7 +115,11 @@ class Recorder:
             return b"", 0.0
 
         audio = np.concatenate(chunks, axis=0)
-        duration = len(audio) / self.sample_rate
+
+        # Duration excludes leading silence (pre-roll + mic warmup)
+        speech_samples = len(audio) - self._speech_start_sample
+        duration = max(speech_samples, 0) / self.sample_rate
+
         return self._to_wav_bytes(audio), duration
 
     def close_mic(self):
@@ -135,6 +140,8 @@ class Recorder:
         self._level = min(rms * 6.0, 1.0)
         if not self._mic_ready and rms > 0:
             self._mic_ready = True
+            total_samples = sum(len(c) for c in self._chunks) if self._recording else 0
+            self._speech_start_sample = total_samples
         if self._recording:
             self._chunks.append(chunk)
         else:

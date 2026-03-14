@@ -25,10 +25,12 @@
   .empty .icon { font-size: 3rem; margin-bottom: 1rem; }
   dialog { max-width: 480px; width: 90vw; }
   dialog article { margin: 0; overflow: hidden; }
-  dialog header { padding: 1rem 1.5rem; margin: 0; }
+  dialog article { margin: 0; overflow: hidden; padding: 1.5rem; }
+  dialog article > header { margin: -1.5rem -1.5rem 1rem -1.5rem; padding: 1rem 1.5rem; }
   dialog header h3 { font-size: 1.1rem; }
-  dialog footer { padding: 1rem 1.5rem; }
-  dialog .body { padding: 0 1.5rem; }
+  dialog article > footer { margin: 1rem -1.5rem -1.5rem -1.5rem; padding: 1rem 1.5rem; }
+  dialog .body { padding: 0; }
+  dialog article > footer button { width: 100%; }
   .form-group { margin-bottom: 1rem; }
   .form-group label { display: block; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 600; }
   .form-group select, .form-group input[type=text] { width: 100%; }
