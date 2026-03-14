@@ -15,7 +15,7 @@ jobs:
       - run: uv sync
       - run: uv run pytest tests/ -v
 
-  publish:
+  publish-pypi:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: check
     runs-on: ubuntu-latest
@@ -28,3 +28,21 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-vscode:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - working-directory: vscode
+        run: npm ci
+      - working-directory: vscode
+        run: npx tsc
+      - working-directory: vscode
+        run: npx vsce publish
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
