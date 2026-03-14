@@ -1,0 +1,143 @@
+"""macOS menu bar icon with state indicators."""
+
+from enum import Enum, auto
+
+import AppKit
+import Foundation
+import objc
+
+
+class State(Enum):
+    IDLE = auto()
+    CONNECTING = auto()
+    LISTENING = auto()
+    TRANSCRIBING = auto()
+
+
+# (SF Symbol name, tint color, menu label)
+_STATE_DISPLAY = {
+    State.IDLE: ("mic.fill", AppKit.NSColor.whiteColor(), "Idle"),
+    State.CONNECTING: ("mic.fill", AppKit.NSColor.orangeColor(), "Connecting mic…"),
+    State.LISTENING: ("mic.fill", AppKit.NSColor.redColor(), "Listening…"),
+    State.TRANSCRIBING: ("sparkles", AppKit.NSColor.systemYellowColor(), "Transcribing…"),
+}
+
+
+def _tinted_symbol(symbol_name: str, color: AppKit.NSColor, size: float = 18.0):
+    """Create a colored (non-template) SF Symbol image for the menu bar."""
+    base = AppKit.NSImage.imageWithSystemSymbolName_accessibilityDescription_(
+        symbol_name, None
+    )
+    if base is None:
+        return None
+
+    # Configure the symbol at the desired point size
+    config = AppKit.NSImageSymbolConfiguration.configurationWithPointSize_weight_(
+        size, AppKit.NSFontWeightRegular
+    )
+    sized = base.imageWithSymbolConfiguration_(config)
+    if sized is None:
+        sized = base
+
+    # Draw the symbol tinted into a new image
+    target_size = sized.size()
+    result = AppKit.NSImage.alloc().initWithSize_(target_size)
+    result.lockFocus()
+
+    color.set()
+    rect = AppKit.NSMakeRect(0, 0, target_size.width, target_size.height)
+    sized.drawInRect_fromRect_operation_fraction_(
+        rect, rect, AppKit.NSCompositeSourceOver, 1.0
+    )
+
+    # Apply tint by drawing color over with source-atop compositing
+    AppKit.NSRectFillUsingOperation(rect, AppKit.NSCompositeSourceAtop)
+
+    result.unlockFocus()
+    result.setTemplate_(False)
+    return result
+
+
+class MenuBar(AppKit.NSObject):
+    """Manages a menu bar status item that reflects recording state."""
+
+    def init(self):
+        self = objc.super(MenuBar, self).init()
+        if self is None:
+            return None
+        self._on_quit = None
+        self._state = State.IDLE
+        self._status_item = None
+        self._menu = None
+        return self
+
+    @objc.python_method
+    def set_on_quit(self, callback):
+        self._on_quit = callback
+
+    @objc.python_method
+    def setup(self):
+        """Create the status item. Must be called on the main thread."""
+        status_bar = AppKit.NSStatusBar.systemStatusBar()
+        self._status_item = status_bar.statusItemWithLength_(
+            AppKit.NSVariableStatusItemLength
+        )
+
+        self._menu = AppKit.NSMenu.alloc().init()
+
+        state_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Idle", None, ""
+        )
+        state_item.setEnabled_(False)
+        state_item.setTag_(100)
+        self._menu.addItem_(state_item)
+
+        self._menu.addItem_(AppKit.NSMenuItem.separatorItem())
+
+        quit_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Quit birdword", "quit:", "q"
+        )
+        quit_item.setTarget_(self)
+        self._menu.addItem_(quit_item)
+
+        self._status_item.setMenu_(self._menu)
+
+        self._apply_state(State.IDLE)
+
+    @objc.python_method
+    def set_state(self, state: State):
+        """Update the menu bar icon. Safe to call from any thread."""
+        self._state = state
+        self.performSelectorOnMainThread_withObject_waitUntilDone_(
+            "applyState:", Foundation.NSNumber.numberWithInt_(state.value), False
+        )
+
+    def applyState_(self, state_number):
+        """ObjC-callable method to apply state on the main thread."""
+        state = State(state_number.intValue())
+        self._apply_state(state)
+
+    @objc.python_method
+    def _apply_state(self, state: State):
+        """Actually update the UI. Must be called on the main thread."""
+        symbol_name, color, label = _STATE_DISPLAY[state]
+
+        button = self._status_item.button()
+
+        image = _tinted_symbol(symbol_name, color)
+        if image is not None:
+            button.setImage_(image)
+            button.setTitle_("")
+        else:
+            button.setImage_(None)
+            button.setTitle_(symbol_name)
+
+        state_item = self._menu.itemWithTag_(100)
+        if state_item is not None:
+            state_item.setTitle_(label)
+
+    def quit_(self, sender):
+        """Handle quit menu item."""
+        if self._on_quit:
+            self._on_quit()
+        AppKit.NSApplication.sharedApplication().terminate_(None)

@@ -1,5 +1,5 @@
 [project]
-name = "paracorder"
+name = "birdword"
 version = "0.1.0"
 description = "Voice dictation daemon using NVIDIA Parakeet on Apple Silicon"
 readme = "README.md"
@@ -22,7 +22,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/paracorder"]
+packages = ["src/birdword"]
 
 [project.scripts]
-paracorder = "paracorder.cli:main"
+birdword = "birdword.cli:main"
