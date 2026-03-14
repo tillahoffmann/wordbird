@@ -1,6 +1,6 @@
 [project]
 name = "birdword"
-version = "0.3.1"
+version = "0.3.2"
 description = "Voice dictation daemon using NVIDIA Parakeet on Apple Silicon"
 readme = "README.md"
 license = "MIT"
