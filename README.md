@@ -24,7 +24,7 @@ The key idea behind birdword is **contextual transcription correction**. When di
 
 Context detection works with:
 - **Terminal.app** — detects the focused tab's shell working directory
-- **VS Code / VS Code Insiders** — via the [Birdword extension](vscode/), which works with local and remote (SSH) workspaces
+- **VS Code / VS Code Insiders** — via the [Birdword extension](https://marketplace.visualstudio.com/items?itemName=tillahoffmann.birdword), which works with local and remote (SSH) workspaces
 
 Transcription and pasting work in any app.
 
