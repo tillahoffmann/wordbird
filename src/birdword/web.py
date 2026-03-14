@@ -28,6 +28,24 @@ TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 PACKAGE_DIR = os.path.dirname(__file__)
 
 
+def _format_duration(seconds: float) -> str:
+    """Format seconds into a human-readable duration."""
+    s = int(seconds)
+    if s < 60:
+        return f"{s}s"
+    m = s // 60
+    s = s % 60
+    if m < 60:
+        return f"{m}m {s}s"
+    h = m // 60
+    m = m % 60
+    if h < 24:
+        return f"{h}h {m}m"
+    d = h // 24
+    h = h % 24
+    return f"{d}d {h}h"
+
+
 def _save_config(form_data):
     """Save form data to config.toml."""
     bw_config.ensure_config_dir()
@@ -60,8 +78,6 @@ def create_app(daemon=None) -> Flask:
     @app.route("/")
     def index():
         s = stats()
-        total_mins = int(s["total_seconds"] // 60)
-        total_secs = int(s["total_seconds"] % 60)
         return render_template(
             "index.html",
             transcriptions=recent(limit=50),
@@ -70,7 +86,9 @@ def create_app(daemon=None) -> Flask:
             toggle_keys=TOGGLE_KEY_OPTIONS,
             key_labels=KEY_LABELS,
             stats=s,
-            total_time=f"{total_mins}m {total_secs}s" if total_mins else f"{total_secs}s",
+            total_words=f"{s['total_words']:,}",
+            total_time=_format_duration(s["total_seconds"]),
+            total_transcriptions=f"{s['total_transcriptions']:,}",
         )
 
     @app.route("/icon.svg")

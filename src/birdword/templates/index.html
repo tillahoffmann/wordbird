@@ -35,11 +35,14 @@
   .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--pico-primary); color: var(--pico-primary-inverse); padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
   .toast.show { opacity: 1; }
   .duration { font-variant-numeric: tabular-nums; }
-  .logo { width: 28px; height: 28px; vertical-align: middle; margin-right: 8px; }
+  .logo { width: 28px; height: 28px; vertical-align: middle; margin-right: 8px; filter: invert(1); }
   .stats-bar { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; }
   .stat { text-align: center; }
   .stat .value { font-size: 1.4rem; font-weight: 700; color: var(--pico-primary); }
   .stat .label { font-size: 0.75rem; color: var(--pico-muted-color); text-transform: uppercase; }
+  .transcript .actions { float: right; }
+  .copy-btn { background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--pico-muted-color); padding: 0.2rem 0.4rem; border-radius: 4px; }
+  .copy-btn:hover { background: var(--pico-card-background-color); color: var(--pico-color); }
 </style>
 </head>
 <body>
@@ -51,7 +54,7 @@
 
   <div class="stats-bar">
     <div class="stat">
-      <div class="value">{{ stats.total_words | default(0) }}</div>
+      <div class="value">{{ total_words }}</div>
       <div class="label">Words</div>
     </div>
     <div class="stat">
@@ -59,7 +62,7 @@
       <div class="label">Recording time</div>
     </div>
     <div class="stat">
-      <div class="value">{{ stats.total_transcriptions | default(0) }}</div>
+      <div class="value">{{ total_transcriptions }}</div>
       <div class="label">Transcriptions</div>
     </div>
   </div>
@@ -68,6 +71,9 @@
     {% if transcriptions %}
     {% for t in transcriptions %}
     <div class="transcript">
+      <div class="actions">
+        <button class="copy-btn" onclick="copyText(this)" data-text="{{ (t.fixed_text or t.raw_text) | e }}" title="Copy to clipboard">📋</button>
+      </div>
       <div class="meta">
         <span>{{ t.timestamp[:16] | replace("T", " ") }}</span>
         {% if t.app_name %}<span class="badge">{{ t.app_name }}</span>{% endif %}
@@ -145,6 +151,12 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function copyText(btn) {
+  navigator.clipboard.writeText(btn.dataset.text).then(() => {
+    showToast('✓ Copied');
+  }).catch(() => showToast('Failed to copy'));
 }
 
 function saveSettings() {

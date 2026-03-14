@@ -145,6 +145,12 @@ class MenuBar(AppKit.NSObject):
 
         self._menu.addItem_(AppKit.NSMenuItem.separatorItem())
 
+        copy_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Copy last transcription", "copyLast:", "c"
+        )
+        copy_item.setTarget_(self)
+        self._menu.addItem_(copy_item)
+
         dashboard_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "Dashboard…", "openDashboard:", "d"
         )
@@ -267,6 +273,16 @@ class MenuBar(AppKit.NSObject):
         """Called by NSTimer to re-register SIGINT after app.run() starts."""
         if hasattr(self, '_sigint_callback') and self._sigint_callback:
             self._sigint_callback()
+
+    def copyLast_(self, sender):
+        """Copy the last transcription to the clipboard."""
+        from birdword.history import recent
+        rows = recent(limit=1)
+        if rows:
+            text = rows[0].get("fixed_text") or rows[0].get("raw_text", "")
+            pb = AppKit.NSPasteboard.generalPasteboard()
+            pb.clearContents()
+            pb.setString_forType_(text, AppKit.NSPasteboardTypeString)
 
     def openDashboard_(self, sender):
         """Open the web dashboard in the browser."""
