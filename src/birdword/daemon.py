@@ -142,6 +142,8 @@ class Daemon:
         finally:
             self._transcribing = False
             self._set_state(State.IDLE)
+            if not self._rcmd_down:
+                self.recorder.close_mic()
 
     def _on_hold_threshold(self):
         """Called when Right Cmd has been held for >1 second."""
@@ -151,8 +153,7 @@ class Daemon:
 
     def _on_quit(self):
         """Clean up on quit."""
-        if self.recorder.is_recording:
-            self.recorder.stop()
+        self.recorder.close_mic()
 
     def _event_tap_callback(self, proxy, event_type, event, refcon):
         """CGEventTap callback — handles Right Cmd and Right Cmd+Space."""
@@ -169,6 +170,9 @@ class Daemon:
                     self._rcmd_down = True
                     self._hold_mode = False
 
+                    # Open mic immediately so pre-roll captures speech
+                    self.recorder.open_mic()
+
                     self._hold_timer = threading.Timer(
                         HOLD_THRESHOLD, self._on_hold_threshold
                     )
@@ -184,6 +188,10 @@ class Daemon:
                     if self._hold_mode:
                         self._hold_mode = False
                         self._stop_and_transcribe()
+
+                    # Close mic if we're not recording (toggle mode keeps it open)
+                    if not self.recorder.is_recording:
+                        self.recorder.close_mic()
 
 
         elif event_type == Quartz.kCGEventKeyDown:
@@ -217,6 +225,7 @@ class Daemon:
 
         hold = self._hold_key_label
         toggle = self._toggle_key_label
+
         print("\n🐦 Birdword is ready.\n")
         print(f"   ⌨️  {hold} + {toggle} — toggle recording")
         print(f"   ⌨️  Hold {hold} (>1s) — record while held")
