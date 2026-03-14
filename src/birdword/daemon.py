@@ -6,6 +6,7 @@ import threading
 import AppKit
 import Quartz
 
+from birdword.history import record as record_transcription
 from birdword.menubar import MenuBar, State
 from birdword.notify import notify
 from birdword.postprocess import PostProcessor
@@ -110,7 +111,7 @@ class Daemon:
             return
 
         print("   ⏹️  Stopped recording.")
-        wav_bytes = self.recorder.stop()
+        wav_bytes, duration = self.recorder.stop()
 
         if not wav_bytes:
             print("   ⚠️  No audio captured.")
@@ -120,34 +121,53 @@ class Daemon:
         self._set_state(State.TRANSCRIBING)
         threading.Thread(
             target=self._transcribe_and_type,
-            args=(wav_bytes,),
+            args=(wav_bytes, duration),
             daemon=True,
         ).start()
 
-    def _transcribe_and_type(self, wav_bytes: bytes):
+    def _transcribe_and_type(self, wav_bytes: bytes, duration_seconds: float = 0.0):
         """Transcribe audio and type the result."""
         self._transcribing = True
         try:
-            # Resolve per-project models from BIRDWORD.md front matter
-            from birdword.context import get_context
+            from birdword.context import get_context, get_terminal_cwd, get_frontmost_app
             from birdword.prompt import parse_birdword_md
+
+            bundle_id, app_name = get_frontmost_app()
+            cwd = None
+            if bundle_id == "com.apple.Terminal":
+                cwd = get_terminal_cwd()
 
             _, template_content = get_context()
             front_matter = {}
             if template_content:
                 front_matter, _ = parse_birdword_md(template_content)
 
+            transcription_model = front_matter.get("transcription_model")
+
             print("   ✨ Transcribing...")
-            text = self.transcriber.transcribe(
+            raw_text = self.transcriber.transcribe(
                 wav_bytes,
-                model_id=front_matter.get("transcription_model"),
+                model_id=transcription_model,
             )
-            if text:
-                print(f"   📝 Raw: {text[:80]}{'...' if len(text) > 80 else ''}")
+            if raw_text:
+                print(f"   📝 Raw: {raw_text[:80]}{'...' if len(raw_text) > 80 else ''}")
+                fixed_text = None
                 if self.postprocessor:
-                    text, _ = self.postprocessor.fix(text)
-                    print(f"   ✅ Fixed: {text[:80]}{'...' if len(text) > 80 else ''}")
-                type_text(text)
+                    fixed_text, _ = self.postprocessor.fix(raw_text)
+                    print(f"   ✅ Fixed: {fixed_text[:80]}{'...' if len(fixed_text) > 80 else ''}")
+
+                final_text = fixed_text or raw_text
+                type_text(final_text)
+
+                record_transcription(
+                    raw_text=raw_text,
+                    fixed_text=fixed_text,
+                    app_name=app_name,
+                    cwd=cwd,
+                    duration_seconds=duration_seconds,
+                    transcription_model=self.transcriber._loaded_model_id,
+                    fix_model=self.postprocessor._loaded_model_id if self.postprocessor else None,
+                )
             else:
                 print("   🔇 No speech detected.")
                 notify("No speech detected.")

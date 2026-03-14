@@ -6,7 +6,15 @@ import signal
 import subprocess
 import sys
 
-PIDFILE = os.path.expanduser("~/.birdword.pid")
+from birdword.config import (
+    CONFIG_PATH,
+    DEFAULTS,
+    DEFAULT_CONFIG_TOML,
+    LOG_PATH,
+    PIDFILE,
+    ensure_config_dir,
+    load_config,
+)
 
 
 def _read_pid() -> int | None:
@@ -14,11 +22,9 @@ def _read_pid() -> int | None:
     try:
         with open(PIDFILE) as f:
             pid = int(f.read().strip())
-        # Check if process is actually running
         os.kill(pid, 0)
         return pid
     except (FileNotFoundError, ValueError, ProcessLookupError, PermissionError):
-        # Clean up stale pidfile
         try:
             os.unlink(PIDFILE)
         except FileNotFoundError:
@@ -27,13 +33,12 @@ def _read_pid() -> int | None:
 
 
 def _write_pid():
-    """Write current PID to pidfile."""
+    ensure_config_dir()
     with open(PIDFILE, "w") as f:
         f.write(str(os.getpid()))
 
 
 def _remove_pid():
-    """Remove pidfile."""
     try:
         os.unlink(PIDFILE)
     except FileNotFoundError:
@@ -41,13 +46,28 @@ def _remove_pid():
 
 
 def _check_permissions() -> bool:
-    """Check permissions, blocking until resolved."""
     from birdword.permissions import verify_permissions
 
     if not verify_permissions():
         print("   Fix permissions above, then try again.")
         return False
     return True
+
+
+def _cli_overrides(args) -> dict:
+    """Extract CLI overrides as a dict (only explicitly set values)."""
+    result = {}
+    if args.model:
+        result["transcription_model"] = args.model
+    if args.fix_model:
+        result["fix_model"] = args.fix_model
+    if args.no_fix:
+        result["no_fix"] = True
+    if args.hold_key != DEFAULTS["hold_key"]:
+        result["hold_key"] = args.hold_key
+    if args.toggle_key != DEFAULTS["toggle_key"]:
+        result["toggle_key"] = args.toggle_key
+    return result
 
 
 def _run_daemon(args):
@@ -62,14 +82,18 @@ def _run_daemon(args):
 
     _write_pid()
     try:
+        from birdword.config import resolve
         from birdword.daemon import Daemon
 
+        cli = _cli_overrides(args)
+        cfg = resolve(cli)
+
         daemon = Daemon(
-            model_id=args.model,
-            fix_model_id=args.fix_model,
-            no_fix=args.no_fix,
-            hold_key=args.hold_key,
-            toggle_key=args.toggle_key,
+            model_id=cfg["transcription_model"],
+            fix_model_id=cfg["fix_model"],
+            no_fix=cfg["no_fix"],
+            hold_key=cfg["hold_key"],
+            toggle_key=cfg["toggle_key"],
         )
         daemon.run()
     finally:
@@ -83,13 +107,11 @@ def _cmd_start(args):
         print(f"🐦 Birdword is already running (pid {existing}).")
         return
 
-    # Check permissions in the foreground first
     if not _check_permissions():
         sys.exit(1)
 
     print("🐦 Starting birdword in the background...")
 
-    # Build the command to run ourselves in blocking mode
     cmd = [sys.executable, "-m", "birdword"]
     if args.model:
         cmd += ["--model", args.model]
@@ -97,14 +119,13 @@ def _cmd_start(args):
         cmd += ["--fix-model", args.fix_model]
     if args.no_fix:
         cmd.append("--no-fix")
-    if args.hold_key != "rcmd":
+    if args.hold_key != DEFAULTS["hold_key"]:
         cmd += ["--hold-key", args.hold_key]
-    if args.toggle_key != "space":
+    if args.toggle_key != DEFAULTS["toggle_key"]:
         cmd += ["--toggle-key", args.toggle_key]
 
-    # Launch detached subprocess
-    log_path = os.path.expanduser("~/.birdword.log")
-    log_file = open(log_path, "a")
+    ensure_config_dir()
+    log_file = open(LOG_PATH, "a")
 
     proc = subprocess.Popen(
         cmd,
@@ -114,21 +135,18 @@ def _cmd_start(args):
         start_new_session=True,
     )
 
-    # Wait briefly to make sure it didn't crash immediately
     try:
         proc.wait(timeout=2)
-        # If we get here, the process exited
-        print(f"   ❌ Failed to start. Check {log_path}")
+        print(f"   ❌ Failed to start. Check {LOG_PATH}")
         sys.exit(1)
     except subprocess.TimeoutExpired:
-        pass  # Still running — good
+        pass
 
     print(f"   ✅ Started (pid {proc.pid}).")
-    print(f"   📄 Logs: {log_path}")
+    print(f"   📄 Logs: {LOG_PATH}")
 
 
 def _cmd_stop(args):
-    """Stop birdword."""
     pid = _read_pid()
     if pid is None:
         print("🐦 Birdword is not running.")
@@ -144,7 +162,6 @@ def _cmd_stop(args):
 
 
 def _cmd_status(args):
-    """Check if birdword is running."""
     pid = _read_pid()
     if pid is not None:
         print(f"🐦 Birdword is running (pid {pid}).")
@@ -153,7 +170,6 @@ def _cmd_status(args):
 
 
 def _cmd_init(args):
-    """Create a BIRDWORD.md in the current directory."""
     from birdword.prompt import DEFAULT_TEMPLATE
 
     path = os.path.join(os.getcwd(), "BIRDWORD.md")
@@ -168,42 +184,79 @@ def _cmd_init(args):
     print("   📝 Edit it to add project-specific terms and context.")
 
 
+def _cmd_config(args):
+    """Show or create the config file."""
+    if not os.path.exists(CONFIG_PATH):
+        ensure_config_dir()
+        with open(CONFIG_PATH, "w") as f:
+            f.write(DEFAULT_CONFIG_TOML)
+        print(f"   ✅ Created {CONFIG_PATH}")
+    else:
+        print(f"   📄 {CONFIG_PATH}\n")
+        with open(CONFIG_PATH) as f:
+            print(f.read())
+
+    cfg = load_config()
+    if cfg:
+        print("   Active overrides:")
+        for k, v in cfg.items():
+            print(f"      {k} = {v!r}")
+    else:
+        print("   No overrides set (using defaults).")
+
+
+def _cmd_history(args):
+    from birdword.history import recent
+
+    rows = recent(limit=args.limit)
+    if not rows:
+        print("🐦 No transcription history.")
+        return
+
+    for row in reversed(rows):
+        ts = row["timestamp"][:19].replace("T", " ")
+        text = row["fixed_text"] or row["raw_text"]
+        app = row["app_name"] or ""
+        print(f"   [{ts}] ({app}) {text[:100]}{'...' if len(text) > 100 else ''}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Voice dictation using Parakeet on Apple Silicon"
     )
     parser.add_argument(
-        "--model",
-        default=None,
-        help="Transcription model (default: mlx-community/parakeet-tdt-0.6b-v2)",
+        "--model", default=None,
+        help="Transcription model",
     )
     parser.add_argument(
-        "--fix-model",
-        default=None,
-        help="Post-processor model (default: mlx-community/Qwen2.5-0.5B-Instruct-4bit)",
+        "--fix-model", default=None,
+        help="Post-processor model",
     )
     parser.add_argument(
-        "--no-fix",
-        action="store_true",
-        help="Disable LLM post-processing of transcription",
+        "--no-fix", action="store_true",
+        help="Disable LLM post-processing",
     )
     parser.add_argument(
-        "--hold-key",
-        default="rcmd",
-        help="Hold key for record (default: rcmd). Options: rcmd, lcmd, ralt, lalt",
+        "--hold-key", default=DEFAULTS["hold_key"],
+        help=f"Hold key (default: {DEFAULTS['hold_key']})",
     )
     parser.add_argument(
-        "--toggle-key",
-        default="space",
-        help="Toggle key pressed with hold key (default: space)",
+        "--toggle-key", default=DEFAULTS["toggle_key"],
+        help=f"Toggle key (default: {DEFAULTS['toggle_key']})",
     )
 
     sub = parser.add_subparsers(dest="command")
-
     sub.add_parser("init", help="Create a BIRDWORD.md in the current directory")
     sub.add_parser("start", help="Start birdword in the background")
     sub.add_parser("stop", help="Stop birdword")
     sub.add_parser("status", help="Check if birdword is running")
+    sub.add_parser("config", help="Show or create the config file")
+
+    history_parser = sub.add_parser("history", help="Show transcription history")
+    history_parser.add_argument(
+        "-n", "--limit", type=int, default=20,
+        help="Number of entries to show (default: 20)",
+    )
 
     args = parser.parse_args()
 
@@ -215,8 +268,11 @@ def main():
         _cmd_stop(args)
     elif args.command == "status":
         _cmd_status(args)
+    elif args.command == "config":
+        _cmd_config(args)
+    elif args.command == "history":
+        _cmd_history(args)
     else:
-        # No subcommand — run blocking (default)
         _run_daemon(args)
 
 

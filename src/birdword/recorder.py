@@ -77,20 +77,21 @@ class Recorder:
             self._chunks = list(self._preroll)
             self._recording = True
 
-    def stop(self) -> bytes:
-        """Stop recording and return WAV bytes. Mic stays open for pre-roll."""
+    def stop(self) -> tuple[bytes, float]:
+        """Stop recording and return (WAV bytes, duration in seconds)."""
         with self._lock:
             if not self._recording:
-                return b""
+                return b"", 0.0
             self._recording = False
             chunks = self._chunks
             self._chunks = []
 
         if not chunks:
-            return b""
+            return b"", 0.0
 
         audio = np.concatenate(chunks, axis=0)
-        return self._to_wav_bytes(audio)
+        duration = len(audio) / self.sample_rate
+        return self._to_wav_bytes(audio), duration
 
     def close_mic(self):
         """Close the mic stream entirely."""
