@@ -27,8 +27,9 @@ class TestActiveContext:
         ctx_path.write_text(json.dumps(ctx))
         monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
 
-        result = _read_active_context(12345)
-        assert result == "Fix: {{ transcript }}"
+        workspace, content = _read_active_context(12345)
+        assert workspace == "/tmp/proj"
+        assert content == "Fix: {{ transcript }}"
 
     def test_ignores_mismatched_pid(self, tmp_path, monkeypatch):
         ctx = {"pid": 12345, "workspace": "/tmp/proj", "birdword_md": "content"}
@@ -36,13 +37,15 @@ class TestActiveContext:
         ctx_path.write_text(json.dumps(ctx))
         monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
 
-        result = _read_active_context(99999)
-        assert result is None
+        workspace, content = _read_active_context(99999)
+        assert workspace is None
+        assert content is None
 
     def test_handles_missing_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(tmp_path / "nope.json"))
-        result = _read_active_context(12345)
-        assert result is None
+        workspace, content = _read_active_context(12345)
+        assert workspace is None
+        assert content is None
 
     def test_handles_no_birdword_md(self, tmp_path, monkeypatch):
         ctx = {"pid": 12345, "workspace": "/tmp/proj", "birdword_md": None}
@@ -50,5 +53,6 @@ class TestActiveContext:
         ctx_path.write_text(json.dumps(ctx))
         monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
 
-        result = _read_active_context(12345)
-        assert result is None
+        workspace, content = _read_active_context(12345)
+        assert workspace == "/tmp/proj"
+        assert content is None

@@ -100,11 +100,13 @@ def _is_child_of(child_pid: int, parent_pid: int) -> bool:
         return False
 
 
-def _read_active_context(frontmost_pid: int) -> str | None:
-    """Read BIRDWORD.md content from the active-context.json file.
+def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
+    """Read workspace and BIRDWORD.md from active-context.json.
 
     Written by the VS Code extension. Verified by checking that the PID
     in the file is a child process of the frontmost application.
+
+    Returns (workspace_path, birdword_md_content).
     """
     try:
         with open(ACTIVE_CONTEXT_PATH) as f:
@@ -112,11 +114,11 @@ def _read_active_context(frontmost_pid: int) -> str | None:
 
         ctx_pid = data.get("pid")
         if ctx_pid != frontmost_pid and not _is_child_of(ctx_pid, frontmost_pid):
-            return None
+            return None, None
 
-        return data.get("birdword_md")
+        return data.get("workspace"), data.get("birdword_md")
     except Exception:
-        return None
+        return None, None
 
 
 def find_context_file(start_dir: str) -> str | None:
@@ -133,8 +135,8 @@ def find_context_file(start_dir: str) -> str | None:
     return None
 
 
-def get_context() -> tuple[str, str | None]:
-    """Get current context: (app_name, BIRDWORD.md contents or None).
+def get_context() -> tuple[str, str | None, str | None]:
+    """Get current context: (app_name, cwd, BIRDWORD.md contents or None).
 
     Resolves context from:
     - Terminal.app: detects focused tab's shell cwd, walks up for BIRDWORD.md
@@ -142,6 +144,7 @@ def get_context() -> tuple[str, str | None]:
     """
     bundle_id, app_name = get_frontmost_app()
 
+    cwd = None
     context_content = None
 
     if bundle_id == "com.apple.Terminal":
@@ -156,8 +159,8 @@ def get_context() -> tuple[str, str | None]:
                     pass
 
     elif bundle_id in _VSCODE_BUNDLE_IDS:
-        workspace = AppKit.NSWorkspace.sharedWorkspace()
-        frontmost_pid = workspace.frontmostApplication().processIdentifier()
-        context_content = _read_active_context(frontmost_pid)
+        ws = AppKit.NSWorkspace.sharedWorkspace()
+        frontmost_pid = ws.frontmostApplication().processIdentifier()
+        cwd, context_content = _read_active_context(frontmost_pid)
 
-    return app_name, context_content
+    return app_name, cwd, context_content

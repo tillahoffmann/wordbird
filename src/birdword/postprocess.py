@@ -44,7 +44,7 @@ class PostProcessor:
         if not text.strip():
             return text, {}
 
-        _, template_content = get_context()
+        _, _, template_content = get_context()
 
         if template_content:
             front_matter, body = parse_birdword_md(template_content)

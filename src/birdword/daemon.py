@@ -159,15 +159,10 @@ class Daemon:
         """Transcribe audio and type the result."""
         self._transcribing = True
         try:
-            from birdword.context import get_context, get_terminal_cwd, get_frontmost_app
+            from birdword.context import get_context
             from birdword.prompt import parse_birdword_md
 
-            bundle_id, app_name = get_frontmost_app()
-            cwd = None
-            if bundle_id == "com.apple.Terminal":
-                cwd = get_terminal_cwd()
-
-            _, template_content = get_context()
+            app_name, cwd, template_content = get_context()
             front_matter = {}
             if template_content:
                 front_matter, _ = parse_birdword_md(template_content)
