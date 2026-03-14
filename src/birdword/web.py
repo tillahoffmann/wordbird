@@ -74,6 +74,7 @@ _daemon = None
 def create_app(daemon=None) -> Flask:
     app = Flask(__name__, template_folder=TEMPLATE_DIR)
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
 
     @app.route("/")
     def index():
