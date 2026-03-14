@@ -7,6 +7,7 @@ import AppKit
 import Quartz
 
 from birdword.menubar import MenuBar, State
+from birdword.notify import notify
 from birdword.postprocess import PostProcessor
 from birdword.recorder import Recorder
 from birdword.transcriber import Transcriber
@@ -137,8 +138,10 @@ class Daemon:
                 type_text(text)
             else:
                 print("   🔇 No speech detected.")
+                notify("No speech detected.")
         except Exception as e:
             print(f"   ❌ Transcription error: {e}")
+            notify(f"Transcription error: {e}")
         finally:
             self._transcribing = False
             self._set_state(State.IDLE)
@@ -249,6 +252,7 @@ class Daemon:
         if tap is None:
             print("   ❌ Failed to create event tap.")
             print("   🔐 Make sure Terminal has Accessibility permission.")
+            notify("Failed to create event tap. Check Accessibility permission.")
             return
 
         run_loop_source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)
