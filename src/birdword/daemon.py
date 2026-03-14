@@ -303,12 +303,13 @@ class Daemon:
         def _handle_sigterm(signum, frame):
             print("\n🐦 Received SIGTERM, shutting down.")
             self._on_quit()
-            Quartz.CFRunLoopStop(Quartz.CFRunLoopGetCurrent())
+            app.terminate_(None)
 
         signal.signal(signal.SIGTERM, _handle_sigterm)
 
         try:
-            Quartz.CFRunLoopRun()
+            # Use NSApplication run loop so menu bar clicks are processed
+            app.run()
         except KeyboardInterrupt:
             print("\n🐦 Shutting down.")
             self._on_quit()
