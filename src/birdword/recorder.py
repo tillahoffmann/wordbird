@@ -37,11 +37,23 @@ class Recorder:
         max_chunks = math.ceil(PREROLL_SECONDS * sample_rate / BLOCK_SIZE)
         self._preroll: collections.deque[np.ndarray] = collections.deque(maxlen=max_chunks)
         self._listening = False
-        self._device_id: int | None = None  # track which device the stream is on
+        self._device_id: int | None = None
+        self._level: float = 0.0  # current audio RMS level (0.0 - 1.0)
+        self._mic_ready = False  # True once first non-zero audio arrives
 
     @property
     def is_recording(self) -> bool:
         return self._recording
+
+    @property
+    def level(self) -> float:
+        """Current audio RMS level, 0.0 to 1.0."""
+        return self._level
+
+    @property
+    def mic_ready(self) -> bool:
+        """True once the mic has produced non-zero audio."""
+        return self._mic_ready
 
     def _current_default_device(self) -> int:
         """Get the current default input device index."""
@@ -78,6 +90,7 @@ class Recorder:
             self._stream.start()
             self._device_id = current_device
             self._listening = True
+            self._mic_ready = False
 
     def start(self):
         """Start recording. Includes pre-roll audio from before this call."""
@@ -117,6 +130,11 @@ class Recorder:
 
     def _callback(self, indata: np.ndarray, frames, time, status):
         chunk = indata.copy()
+        # Update level (RMS, scaled up for visibility)
+        rms = float(np.sqrt(np.mean(chunk ** 2)))
+        self._level = min(rms * 8.0, 1.0)
+        if not self._mic_ready and rms > 0:
+            self._mic_ready = True
         if self._recording:
             self._chunks.append(chunk)
         else:

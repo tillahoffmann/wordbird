@@ -95,11 +95,18 @@ def _tinted_sf_symbol(name: str, color: AppKit.NSColor, size: float = 16.0):
 class MenuBar(AppKit.NSObject):
     """Manages a menu bar status item that reflects recording state."""
 
+    _BARS = " ▁▂▃▄▅▆▇"
+    _SPINNER = "◐◓◑◒"
+
     def init(self):
         self = objc.super(MenuBar, self).init()
         if self is None:
             return None
         self._on_quit = None
+        self._level_callback = None  # callable returning float 0-1
+        self._mic_ready_callback = None  # callable returning bool
+        self._level_timer = None
+        self._spinner_idx = 0
         self._state = State.IDLE
         self._status_item = None
         self._menu = None
@@ -108,6 +115,16 @@ class MenuBar(AppKit.NSObject):
     @objc.python_method
     def set_on_quit(self, callback):
         self._on_quit = callback
+
+    @objc.python_method
+    def set_level_callback(self, callback):
+        """Set a callable that returns the current audio level (0.0-1.0)."""
+        self._level_callback = callback
+
+    @objc.python_method
+    def set_mic_ready_callback(self, callback):
+        """Set a callable that returns whether the mic has produced audio."""
+        self._mic_ready_callback = callback
 
     @objc.python_method
     def setup(self):
@@ -178,14 +195,73 @@ class MenuBar(AppKit.NSObject):
 
         if image is not None:
             button.setImage_(image)
-            button.setTitle_("")
         else:
             button.setImage_(None)
-            button.setTitle_("🐦")
+
+        # Start/stop the level meter timer
+        if state in (State.LISTENING, State.CONNECTING):
+            self._spinner_idx = 0
+            self._start_level_timer()
+        else:
+            self._stop_level_timer()
+            button.setTitle_("")
 
         state_item = self._menu.itemWithTag_(100)
         if state_item is not None:
             state_item.setTitle_(label)
+
+    @objc.python_method
+    def _start_level_timer(self):
+        """Start polling audio level to update the menu bar meter."""
+        if self._level_timer is not None:
+            return
+        self._level_timer = Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            0.1, self, "updateLevel:", None, True
+        )
+
+    @objc.python_method
+    def _stop_level_timer(self):
+        """Stop the level meter timer."""
+        if self._level_timer is not None:
+            self._level_timer.invalidate()
+            self._level_timer = None
+
+    def updateLevel_(self, timer):
+        """Called by NSTimer to update the audio level or spinner display."""
+        if self._state not in (State.LISTENING, State.CONNECTING):
+            return
+
+        button = self._status_item.button()
+        mic_ready = self._mic_ready_callback() if self._mic_ready_callback else True
+
+        if not mic_ready:
+            # Show yellow bird with spinner while mic is connecting
+            image = _load_parrot_icon(color=_rgb(255, 204, 0))
+            if image:
+                button.setImage_(image)
+            char = self._SPINNER[self._spinner_idx % len(self._SPINNER)]
+            self._spinner_idx += 1
+            color = _rgb(255, 204, 0)
+        else:
+            # Show red bird with level meter
+            if self._state != State.LISTENING:
+                self._apply_state(State.LISTENING)
+            image = _load_parrot_icon(color=_rgb(255, 56, 60))
+            if image:
+                button.setImage_(image)
+            level = self._level_callback() if self._level_callback else 0
+            idx = int(level * (len(self._BARS) - 1))
+            char = self._BARS[min(idx, len(self._BARS) - 1)]
+            color = _rgb(255, 56, 60)
+
+        attr_str = AppKit.NSAttributedString.alloc().initWithString_attributes_(
+            f" {char}",
+            {
+                AppKit.NSFontAttributeName: AppKit.NSFont.monospacedSystemFontOfSize_weight_(12, AppKit.NSFontWeightRegular),
+                AppKit.NSForegroundColorAttributeName: color,
+            },
+        )
+        button.setAttributedTitle_(attr_str)
 
     def reinstallSignalHandler_(self, timer):
         """Called by NSTimer to re-register SIGINT after app.run() starts."""

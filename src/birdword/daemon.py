@@ -10,6 +10,7 @@ import Quartz
 from birdword.history import record as record_transcription
 from birdword.menubar import MenuBar, State
 from birdword.notify import notify
+from birdword.overlay import Overlay
 from birdword.postprocess import PostProcessor
 from birdword.recorder import Recorder
 from birdword.transcriber import Transcriber
@@ -82,7 +83,14 @@ class Daemon:
         self._toggle_key_label = KEY_LABELS.get(toggle_key, toggle_key)
         self.menubar = MenuBar.alloc().init()
         self.menubar.set_on_quit(self._on_quit)
+        self.menubar.set_level_callback(lambda: self.recorder.level)
+        self.menubar.set_mic_ready_callback(lambda: self.recorder.mic_ready)
+        self.overlay = Overlay.alloc().init()
+        self.overlay.set_level_callback(lambda: self.recorder.level)
+        self.overlay.set_mic_ready_callback(lambda: self.recorder.mic_ready)
+        self.overlay.set_cancel_callback(self._abort_recording)
         self._transcribing = False
+        self._cancelled = False
 
         self._rcmd_down = False
         self._hold_mode = False
@@ -128,6 +136,7 @@ class Daemon:
             return
         if not self.recorder.is_recording:
             self._set_state(State.CONNECTING)
+            self.overlay.show_connecting()
             print("   🔌 Connecting mic...")
             self.recorder.start()
             self._set_state(State.LISTENING)
@@ -146,9 +155,11 @@ class Daemon:
         if not wav_bytes:
             print("   ⚠️  No audio captured.")
             self._set_state(State.IDLE)
+            self.overlay.hide()
             return
 
         self._set_state(State.TRANSCRIBING)
+        self.overlay.show_transcribing()
         threading.Thread(
             target=self._transcribe_and_type,
             args=(wav_bytes, duration),
@@ -158,6 +169,7 @@ class Daemon:
     def _transcribe_and_type(self, wav_bytes: bytes, duration_seconds: float = 0.0):
         """Transcribe audio and type the result."""
         self._transcribing = True
+        self._cancelled = False
         try:
             from birdword.context import get_context
             from birdword.prompt import parse_birdword_md
@@ -169,20 +181,37 @@ class Daemon:
 
             transcription_model = front_matter.get("transcription_model")
 
+            if self._cancelled:
+                return
+
             print("   ✨ Transcribing...")
             raw_text = self.transcriber.transcribe(
                 wav_bytes,
                 model_id=transcription_model,
             )
+
+            if self._cancelled:
+                return
+
             if raw_text:
                 print(f"   📝 Raw: {raw_text[:80]}{'...' if len(raw_text) > 80 else ''}")
                 fixed_text = None
                 if self.postprocessor:
+                    self.overlay.show_improving()
+
+                    if self._cancelled:
+                        return
+
                     fixed_text, _ = self.postprocessor.fix(raw_text)
                     print(f"   ✅ Fixed: {fixed_text[:80]}{'...' if len(fixed_text) > 80 else ''}")
 
+                if self._cancelled:
+                    return
+
                 final_text = fixed_text or raw_text
+                word_count = len(final_text.split())
                 type_text(final_text)
+                self.overlay.show_done(word_count)
 
                 record_transcription(
                     raw_text=raw_text,
@@ -195,10 +224,11 @@ class Daemon:
                 )
             else:
                 print("   🔇 No speech detected.")
-                notify("No speech detected.")
+                self.overlay.show_error("No speech detected")
         except Exception as e:
-            print(f"   ❌ Transcription error: {e}")
-            notify(f"Transcription error: {e}")
+            if not self._cancelled:
+                print(f"   ❌ Transcription error: {e}")
+                self.overlay.show_error("Transcription failed")
         finally:
             self._transcribing = False
             self._set_state(State.IDLE)
@@ -210,6 +240,16 @@ class Daemon:
         if self._rcmd_down:
             self._hold_mode = True
             self._start_recording()
+
+    def _abort_recording(self):
+        """Abort recording or transcription."""
+        print("   ⛔ Cancelled.")
+        self._cancelled = True
+        if self.recorder.is_recording:
+            self.recorder.stop()
+            self.recorder.close_mic()
+        self._set_state(State.IDLE)
+        self.overlay.show_error("Cancelled")
 
     def _on_quit(self):
         """Clean up on quit."""
@@ -259,6 +299,11 @@ class Daemon:
                 event, Quartz.kCGKeyboardEventKeycode
             )
 
+            # Escape aborts recording or transcription
+            if keycode == 53 and (self.recorder.is_recording or self._transcribing):
+                self._abort_recording()
+                return None
+
             if keycode == self._toggle_keycode and self._rcmd_down and not self._hold_mode:
                 if self._hold_timer is not None:
                     self._hold_timer.cancel()
@@ -278,6 +323,7 @@ class Daemon:
         app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
 
         self.menubar.setup()
+        self.overlay.setup()
 
         self.transcriber.load()
         if self.postprocessor:
