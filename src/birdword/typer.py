@@ -62,7 +62,7 @@ def type_text(text: str):
     # Set clipboard to our text
     pb = AppKit.NSPasteboard.generalPasteboard()
     pb.clearContents()
-    pb.setString_forType_(text, AppKit.NSPasteboardTypeString)
+    pb.setString_forType_(text + " ", AppKit.NSPasteboardTypeString)
 
     time.sleep(0.05)
     _press_cmd_v()
