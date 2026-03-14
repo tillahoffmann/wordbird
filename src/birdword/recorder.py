@@ -61,19 +61,19 @@ class Recorder:
         Always closes and reopens to pick up device changes (e.g.,
         Bluetooth headphones connecting/disconnecting).
         """
-        with self._lock:
-            # Close existing stream so we always use the current default device
-            if self._listening:
-                try:
-                    self._stream.stop()
-                    self._stream.close()
-                except Exception:
-                    pass
-                self._stream = None
-                self._listening = False
-                self._preroll.clear()
+        try:
+            with self._lock:
+                # Close existing stream so we always use the current default device
+                if self._listening:
+                    try:
+                        self._stream.stop()
+                        self._stream.close()
+                    except Exception:
+                        pass
+                    self._stream = None
+                    self._listening = False
+                    self._preroll.clear()
 
-            try:
                 self._stream = sd.InputStream(
                     samplerate=self.sample_rate,
                     channels=CHANNELS,
@@ -84,10 +84,10 @@ class Recorder:
                 self._stream.start()
                 self._listening = True
                 self._mic_ready = False
-            except Exception as e:
-                print(f"   ⚠️  Mic open failed: {e}")
-                self._stream = None
-                self._listening = False
+        except Exception as e:
+            print(f"   ⚠️  Mic open failed: {e}")
+            self._stream = None
+            self._listening = False
 
     def start(self):
         """Start recording. Includes pre-roll audio from before this call."""
