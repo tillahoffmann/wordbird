@@ -20,13 +20,9 @@ uvx birdword status
 
 ## Context-aware correction
 
-The key idea behind birdword is **contextual transcription correction**. Birdword detects the workspace of the focused app and looks for a `BIRDWORD.md` file up the directory tree. This lets you teach birdword your project's domain.
+The key idea behind birdword is **contextual transcription correction**. When dictating into **Terminal.app**, birdword detects the focused tab's working directory and looks for a `BIRDWORD.md` file up the directory tree. This lets you teach birdword your project's domain:
 
-Supported apps for context detection:
-- **Terminal.app** — detects the focused tab's shell working directory
-- **VS Code** and **VS Code Insiders** — detects the active workspace folder
-
-Transcription and pasting work in any app, but `BIRDWORD.md` is only picked up from the apps above.
+> **Note:** Context detection currently only works with Terminal.app. Transcription and pasting work in any app, but `BIRDWORD.md` is only picked up when dictating from a Terminal window.
 
 ```bash
 uvx birdword init

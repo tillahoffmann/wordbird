@@ -1,33 +1,6 @@
 """Tests for context detection."""
 
-import os
-from birdword.context import _extract_workspace_from_title, find_context_file
-
-
-class TestExtractWorkspaceFromTitle:
-    def test_standard_title(self):
-        title = "main.py - myproject - Visual Studio Code"
-        assert _extract_workspace_from_title(title) == "myproject"
-
-    def test_insiders_title(self):
-        title = "main.py - myproject - Visual Studio Code - Insiders"
-        assert _extract_workspace_from_title(title) == "myproject"
-
-    def test_no_editor_open(self):
-        title = "myproject - Visual Studio Code"
-        assert _extract_workspace_from_title(title) == "myproject"
-
-    def test_dirty_indicator(self):
-        title = "● main.py - myproject - Visual Studio Code"
-        assert _extract_workspace_from_title(title) == "myproject"
-
-    def test_not_vscode(self):
-        title = "Some Other App"
-        assert _extract_workspace_from_title(title) is None
-
-    def test_multi_dash_filename(self):
-        title = "my-component.tsx - my-project - Visual Studio Code"
-        assert _extract_workspace_from_title(title) == "my-project"
+from birdword.context import find_context_file
 
 
 class TestFindContextFile:
