@@ -1,5 +1,6 @@
 """macOS menu bar icon with state indicators."""
 
+import os
 from enum import Enum, auto
 
 import AppKit
@@ -18,43 +19,46 @@ def _rgb(r, g, b):
     return AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(r/255, g/255, b/255, 1.0)
 
 
-_STATE_DISPLAY = {
-    State.IDLE: ("bird.fill", AppKit.NSColor.whiteColor(), "Idle"),
-    State.CONNECTING: ("bird.fill", _rgb(255, 204, 0), "Connecting mic…"),
-    State.LISTENING: ("bird.fill", _rgb(255, 56, 60), "Listening…"),
-    State.TRANSCRIBING: ("sparkles", _rgb(255, 204, 0), "Transcribing…"),
+_STATE_COLORS = {
+    State.IDLE: AppKit.NSColor.whiteColor(),
+    State.CONNECTING: _rgb(255, 204, 0),
+    State.LISTENING: _rgb(255, 56, 60),
+    State.TRANSCRIBING: _rgb(255, 204, 0),
 }
 
+_STATE_LABELS = {
+    State.IDLE: "Idle",
+    State.CONNECTING: "Connecting mic…",
+    State.LISTENING: "Listening…",
+    State.TRANSCRIBING: "Transcribing…",
+}
 
-def _tinted_symbol(symbol_name: str, color: AppKit.NSColor, size: float = 18.0):
-    """Create a colored (non-template) SF Symbol image for the menu bar."""
-    base = AppKit.NSImage.imageWithSystemSymbolName_accessibilityDescription_(
-        symbol_name, None
-    )
+# Path to the SVG icon bundled with the package
+_ICON_SVG = os.path.join(os.path.dirname(__file__), "icon.svg")
+
+
+def _load_icon_tinted(color: AppKit.NSColor, size: float = 18.0):
+    """Load the parrot SVG and tint it to the given color."""
+    base = AppKit.NSImage.alloc().initWithContentsOfFile_(_ICON_SVG)
     if base is None:
         return None
 
-    # Configure the symbol at the desired point size
-    config = AppKit.NSImageSymbolConfiguration.configurationWithPointSize_weight_(
-        size, AppKit.NSFontWeightRegular
-    )
-    sized = base.imageWithSymbolConfiguration_(config)
-    if sized is None:
-        sized = base
-
-    # Draw the symbol tinted into a new image
-    target_size = sized.size()
+    target_size = AppKit.NSMakeSize(size, size)
     result = AppKit.NSImage.alloc().initWithSize_(target_size)
     result.lockFocus()
 
-    color.set()
-    rect = AppKit.NSMakeRect(0, 0, target_size.width, target_size.height)
-    sized.drawInRect_fromRect_operation_fraction_(
-        rect, rect, AppKit.NSCompositeSourceOver, 1.0
+    src_size = base.size()
+    base.drawInRect_fromRect_operation_fraction_(
+        AppKit.NSMakeRect(0, 0, size, size),
+        AppKit.NSMakeRect(0, 0, src_size.width, src_size.height),
+        AppKit.NSCompositeSourceOver, 1.0,
     )
 
-    # Apply tint by drawing color over with source-atop compositing
-    AppKit.NSRectFillUsingOperation(rect, AppKit.NSCompositeSourceAtop)
+    color.set()
+    AppKit.NSRectFillUsingOperation(
+        AppKit.NSMakeRect(0, 0, size, size),
+        AppKit.NSCompositeSourceAtop,
+    )
 
     result.unlockFocus()
     result.setTemplate_(False)
@@ -131,17 +135,18 @@ class MenuBar(AppKit.NSObject):
     @objc.python_method
     def _apply_state(self, state: State):
         """Actually update the UI. Must be called on the main thread."""
-        symbol_name, color, label = _STATE_DISPLAY[state]
+        color = _STATE_COLORS[state]
+        label = _STATE_LABELS[state]
 
         button = self._status_item.button()
 
-        image = _tinted_symbol(symbol_name, color)
+        image = _load_icon_tinted(color)
         if image is not None:
             button.setImage_(image)
             button.setTitle_("")
         else:
             button.setImage_(None)
-            button.setTitle_(symbol_name)
+            button.setTitle_("🐦")
 
         state_item = self._menu.itemWithTag_(100)
         if state_item is not None:
