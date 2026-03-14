@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🐦 Birdword</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<style>
+  :root { --pico-font-size: 16px; }
+  body { padding: 0; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; margin-bottom: 1rem; }
+  header h1 { margin: 0; font-size: 1.5rem; }
+  .gear-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; border-radius: 8px; }
+  .gear-btn:hover { background: var(--pico-card-background-color); }
+  .transcript-list { display: flex; flex-direction: column; gap: 0.5rem; }
+  .transcript { padding: 1rem; border-radius: 8px; background: var(--pico-card-background-color); }
+  .transcript .meta { font-size: 0.8rem; color: var(--pico-muted-color); margin-bottom: 0.4rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .transcript .meta .badge { background: var(--pico-primary-background); color: var(--pico-primary-inverse); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.7rem; }
+  .transcript .text { margin-bottom: 0.2rem; }
+  .transcript .original { font-size: 0.85rem; color: var(--pico-muted-color); }
+  .transcript .original summary { cursor: pointer; font-size: 0.75rem; color: var(--pico-muted-color); }
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--pico-muted-color); }
+  .empty .icon { font-size: 3rem; margin-bottom: 1rem; }
+  dialog { max-width: 500px; }
+  dialog article { margin: 0; }
+  dialog header { padding: 1rem 1.5rem; margin: 0; }
+  dialog footer { padding: 1rem 1.5rem; }
+  dialog .body { padding: 0 1.5rem; }
+  .form-group { margin-bottom: 1rem; }
+  .form-group label { display: block; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 600; }
+  .form-group select, .form-group input[type=text] { width: 100%; }
+  .checkbox-group { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+  .checkbox-group input { margin: 0; }
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--pico-primary); color: var(--pico-primary-inverse); padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
+  .toast.show { opacity: 1; }
+  .duration { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main class="container">
+  <header>
+    <h1>🐦 Birdword</h1>
+    <button class="gear-btn" onclick="document.getElementById('settings-modal').showModal()" title="Settings">⚙️</button>
+  </header>
+
+  <div class="transcript-list">
+    {% if transcriptions %}
+    {% for t in transcriptions %}
+    <div class="transcript">
+      <div class="meta">
+        <span>{{ t.timestamp[:16] | replace("T", " ") }}</span>
+        {% if t.app_name %}<span class="badge">{{ t.app_name }}</span>{% endif %}
+        {% if t.duration_seconds %}<span class="duration">{{ "%.1f" | format(t.duration_seconds) }}s</span>{% endif %}
+        {% if t.cwd %}<span><code>{{ t.cwd | replace("/Users/" + t.cwd.split("/")[2] + "/", "~/") }}</code></span>{% endif %}
+      </div>
+      <div class="text">{{ t.fixed_text or t.raw_text }}</div>
+      {% if t.fixed_text and t.fixed_text != t.raw_text %}
+      <details class="original">
+        <summary>Show original</summary>
+        {{ t.raw_text }}
+      </details>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty">
+      <div class="icon">🎤</div>
+      <p>No transcriptions yet.</p>
+      <p><small>Press your hotkey to start dictating.</small></p>
+    </div>
+    {% endif %}
+  </div>
+
+  <dialog id="settings-modal">
+    <article>
+      <header>
+        <button aria-label="Close" rel="prev" onclick="document.getElementById('settings-modal').close()"></button>
+        <h3>Settings</h3>
+      </header>
+      <div class="body">
+        <form id="settings-form">
+          <div class="form-group">
+            <label for="hold_key">Hold key</label>
+            <select name="hold_key" id="hold_key">
+              {% for k in hold_keys %}
+              <option value="{{ k }}" {{ 'selected' if config.hold_key == k else '' }}>{{ key_labels[k] }} ({{ k }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="toggle_key">Toggle key</label>
+            <select name="toggle_key" id="toggle_key">
+              {% for k in toggle_keys %}
+              <option value="{{ k }}" {{ 'selected' if config.toggle_key == k else '' }}>{{ key_labels[k] }} ({{ k }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="transcription_model">Transcription model</label>
+            <input type="text" name="transcription_model" id="transcription_model" value="{{ config.transcription_model }}">
+          </div>
+          <div class="form-group">
+            <label for="fix_model">Post-processing model</label>
+            <input type="text" name="fix_model" id="fix_model" value="{{ config.fix_model }}">
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" name="no_fix" id="no_fix" {{ 'checked' if config.no_fix else '' }}>
+            <label for="no_fix">Disable post-processing</label>
+          </div>
+        </form>
+      </div>
+      <footer>
+        <button onclick="saveSettings()">Save</button>
+      </footer>
+    </article>
+  </dialog>
+
+  <div class="toast" id="toast"></div>
+</main>
+
+<script>
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function saveSettings() {
+  const form = document.getElementById('settings-form');
+  const data = new FormData(form);
+  fetch('/api/config', {
+    method: 'POST',
+    body: data,
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      showToast('✓ Saved and applied');
+      document.getElementById('settings-modal').close();
+    }
+  }).catch(() => showToast('Failed to save'));
+}
+</script>
+</body>
+</html>

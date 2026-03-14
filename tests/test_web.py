@@ -25,23 +25,17 @@ class TestWeb:
         resp = client.get("/")
         assert resp.status_code == 200
         assert b"Birdword" in resp.data
-        assert b"History" in resp.data
+        assert b"settings-modal" in resp.data
 
-    def test_config_page_loads(self, client):
-        resp = client.get("/config")
-        assert resp.status_code == 200
-        assert b"Settings" in resp.data
-        assert b"hold_key" in resp.data
-
-    def test_config_save(self, client):
-        resp = client.post("/config", data={
+    def test_config_save_via_api(self, client):
+        resp = client.post("/api/config", data={
             "hold_key": "lalt",
             "toggle_key": "return",
             "transcription_model": "mlx-community/parakeet-tdt-0.6b-v2",
             "fix_model": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
         })
         assert resp.status_code == 200
-        assert b"Saved" in resp.data
+        assert resp.json["ok"] is True
 
         from birdword.config import load_config
         cfg = load_config()
@@ -55,3 +49,7 @@ class TestWeb:
         resp = client.get("/")
         assert b"test transcript" in resp.data
         assert b"Test transcript." in resp.data
+
+    def test_empty_state(self, client):
+        resp = client.get("/")
+        assert b"No transcriptions yet" in resp.data
