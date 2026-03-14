@@ -119,14 +119,13 @@ PAGE_TEMPLATE = """\
       </div>
       <div>
         <button type="submit">Save</button>
-        {% if saved %}<span class="saved">✓ Saved — restart birdword to apply</span>{% endif %}
+        {% if saved %}<span class="saved">✓ Saved and applied</span>{% endif %}
       </div>
     </form>
   </div>
 
   <p class="subtitle" style="margin-top: 1rem;">
-    Config file: <code>{{ config_path }}</code><br>
-    Changes take effect after restarting birdword.
+    Config file: <code>{{ config_path }}</code>
   </p>
   {% endif %}
 </body>
@@ -156,7 +155,10 @@ def _get_effective_config() -> dict:
     return result
 
 
-def create_app() -> Flask:
+_daemon = None
+
+
+def create_app(daemon=None) -> Flask:
     app = Flask(__name__)
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
@@ -173,6 +175,9 @@ def create_app() -> Flask:
         saved = False
         if request.method == "POST":
             _save_config(request.form)
+            cfg = _get_effective_config()
+            if _daemon is not None:
+                _daemon.apply_config(cfg)
             saved = True
         return render_template_string(
             PAGE_TEMPLATE,
@@ -187,9 +192,11 @@ def create_app() -> Flask:
     return app
 
 
-def start_server():
+def start_server(daemon=None):
     """Start the web server in a background thread."""
-    app = create_app()
+    global _daemon
+    _daemon = daemon
+    app = create_app(daemon)
     thread = threading.Thread(
         target=app.run,
         kwargs={"host": HOST, "port": PORT, "debug": False, "use_reloader": False},

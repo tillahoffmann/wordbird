@@ -87,6 +87,35 @@ class Daemon:
         self._hold_mode = False
         self._hold_timer: threading.Timer | None = None
 
+    def apply_config(self, cfg: dict):
+        """Apply configuration changes live."""
+        # Hotkeys
+        hold_key = cfg.get("hold_key", "rcmd")
+        toggle_key = cfg.get("toggle_key", "space")
+        self._hold_keycode = KEYCODES[hold_key]
+        self._hold_flag = MODIFIER_FLAGS[hold_key]
+        self._toggle_keycode = KEYCODES[toggle_key]
+        self._hold_key_label = KEY_LABELS.get(hold_key, hold_key)
+        self._toggle_key_label = KEY_LABELS.get(toggle_key, toggle_key)
+
+        # Models — load() skips if already loaded with the same ID
+        transcription_model = cfg.get("transcription_model")
+        if transcription_model:
+            self.transcriber.load(transcription_model)
+
+        fix_model = cfg.get("fix_model")
+        no_fix = cfg.get("no_fix", False)
+
+        if no_fix:
+            self.postprocessor = None
+        elif self.postprocessor is None:
+            self.postprocessor = PostProcessor(fix_model)
+            self.postprocessor.load()
+        elif fix_model:
+            self.postprocessor.load(fix_model)
+
+        print(f"   🔄 Config reloaded: {self._hold_key_label} + {self._toggle_key_label}")
+
     def _set_state(self, state: State):
         """Update menu bar state on the main thread."""
         self.menubar.set_state(state)
@@ -259,7 +288,7 @@ class Daemon:
             self.postprocessor.load()
 
         from birdword.web import start_server
-        dashboard_url = start_server()
+        dashboard_url = start_server(daemon=self)
 
         hold = self._hold_key_label
         toggle = self._toggle_key_label
