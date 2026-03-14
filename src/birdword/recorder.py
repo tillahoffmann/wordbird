@@ -84,10 +84,26 @@ class Recorder:
                 self._stream.start()
                 self._listening = True
                 self._mic_ready = False
-        except Exception as e:
-            print(f"   ⚠️  Mic open failed: {e}")
-            self._stream = None
-            self._listening = False
+        except Exception:
+            # PortAudio device list is stale — reinitialize and retry once
+            try:
+                sd._terminate()
+                sd._initialize()
+                with self._lock:
+                    self._stream = sd.InputStream(
+                        samplerate=self.sample_rate,
+                        channels=CHANNELS,
+                        dtype=DTYPE,
+                        blocksize=BLOCK_SIZE,
+                        callback=self._callback,
+                    )
+                    self._stream.start()
+                    self._listening = True
+                    self._mic_ready = False
+            except Exception as e2:
+                print(f"   ⚠️  Mic open failed after reinit: {e2}")
+                self._stream = None
+                self._listening = False
 
     def start(self):
         """Start recording. Includes pre-roll audio from before this call."""
