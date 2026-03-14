@@ -328,17 +328,13 @@ class Daemon:
         )
         Quartz.CGEventTapEnable(tap, True)
 
-        # Handle SIGTERM for clean shutdown via `birdword stop`
-        def _handle_sigterm(signum, frame):
-            print("\n🐦 Received SIGTERM, shutting down.")
+        def _handle_shutdown(signum, frame):
+            signame = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
+            print(f"\n🐦 Received {signame}, shutting down.")
             self._on_quit()
             app.terminate_(None)
 
-        signal.signal(signal.SIGTERM, _handle_sigterm)
+        signal.signal(signal.SIGTERM, _handle_shutdown)
+        signal.signal(signal.SIGINT, _handle_shutdown)
 
-        try:
-            # Use NSApplication run loop so menu bar clicks are processed
-            app.run()
-        except KeyboardInterrupt:
-            print("\n🐦 Shutting down.")
-            self._on_quit()
+        app.run()
