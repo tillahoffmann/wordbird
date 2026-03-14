@@ -16,7 +16,7 @@ Or run without installing:
 uvx birdword
 ```
 
-Requires macOS on Apple Silicon (M1+) and Python 3.13+.
+Requires macOS on Apple Silicon (M1+) and Python 3.12+.
 
 ## Usage
 
