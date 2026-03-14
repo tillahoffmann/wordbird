@@ -50,9 +50,8 @@ Example 3:
 Input: "we need to refactor the a p i endpoint"
 Output: "We need to refactor the API endpoint."
 
-This is a Rust networking project using tokio and hyper.
-Key terms: epoll, mio, AsyncRead, TcpListener
-Names: Till
+Key terms: MyClass, some_function, PostgreSQL
+Names: Alice, Bob
 
 Input: "{{ transcript }}"
 Output:
