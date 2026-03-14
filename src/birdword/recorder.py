@@ -132,7 +132,7 @@ class Recorder:
         chunk = indata.copy()
         # Update level (RMS, scaled up for visibility)
         rms = float(np.sqrt(np.mean(chunk ** 2)))
-        self._level = min(rms * 8.0, 1.0)
+        self._level = min(rms * 6.0, 1.0)
         if not self._mic_ready and rms > 0:
             self._mic_ready = True
         if self._recording:
