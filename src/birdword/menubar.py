@@ -20,7 +20,7 @@ def _rgb(r, g, b):
 
 
 _STATE_COLORS = {
-    State.IDLE: AppKit.NSColor.whiteColor(),
+    State.IDLE: None,  # None = use template (adapts to menu bar)
     State.CONNECTING: _rgb(255, 204, 0),
     State.LISTENING: _rgb(255, 56, 60),
     State.TRANSCRIBING: _rgb(255, 204, 0),
@@ -33,12 +33,15 @@ _STATE_LABELS = {
     State.TRANSCRIBING: "Transcribing…",
 }
 
-# Path to the SVG icon bundled with the package
 _ICON_SVG = os.path.join(os.path.dirname(__file__), "icon.svg")
 
 
-def _load_icon_tinted(color: AppKit.NSColor, size: float = 18.0):
-    """Load the parrot SVG and tint it to the given color."""
+def _load_icon(color: AppKit.NSColor | None = None, size: float = 18.0):
+    """Load the parrot SVG icon for the menu bar.
+
+    If color is None, returns a template image (adapts to menu bar theme).
+    If color is set, tints the icon to that color.
+    """
     base = AppKit.NSImage.alloc().initWithContentsOfFile_(_ICON_SVG)
     if base is None:
         return None
@@ -54,14 +57,15 @@ def _load_icon_tinted(color: AppKit.NSColor, size: float = 18.0):
         AppKit.NSCompositeSourceOver, 1.0,
     )
 
-    color.set()
-    AppKit.NSRectFillUsingOperation(
-        AppKit.NSMakeRect(0, 0, size, size),
-        AppKit.NSCompositeSourceAtop,
-    )
+    if color is not None:
+        color.set()
+        AppKit.NSRectFillUsingOperation(
+            AppKit.NSMakeRect(0, 0, size, size),
+            AppKit.NSCompositeSourceAtop,
+        )
 
     result.unlockFocus()
-    result.setTemplate_(False)
+    result.setTemplate_(color is None)
     return result
 
 
@@ -140,7 +144,7 @@ class MenuBar(AppKit.NSObject):
 
         button = self._status_item.button()
 
-        image = _load_icon_tinted(color)
+        image = _load_icon(color)
         if image is not None:
             button.setImage_(image)
             button.setTitle_("")
