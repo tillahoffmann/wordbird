@@ -258,10 +258,14 @@ class Daemon:
         if self.postprocessor:
             self.postprocessor.load()
 
+        from birdword.web import start_server
+        dashboard_url = start_server()
+
         hold = self._hold_key_label
         toggle = self._toggle_key_label
 
         print("\n🐦 Birdword is ready.\n")
+        print(f"   🌐 Dashboard: {dashboard_url}")
         print(f"   ⌨️  {hold} + {toggle} — toggle recording")
         print(f"   ⌨️  Hold {hold} (>1s) — record while held")
         print("   📋 Transcribed text is pasted into the focused app.")

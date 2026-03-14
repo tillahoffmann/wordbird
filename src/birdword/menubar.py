@@ -97,6 +97,14 @@ class MenuBar(AppKit.NSObject):
 
         self._menu.addItem_(AppKit.NSMenuItem.separatorItem())
 
+        dashboard_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Dashboard…", "openDashboard:", "d"
+        )
+        dashboard_item.setTarget_(self)
+        self._menu.addItem_(dashboard_item)
+
+        self._menu.addItem_(AppKit.NSMenuItem.separatorItem())
+
         quit_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "Quit birdword", "quit:", "q"
         )
@@ -138,6 +146,11 @@ class MenuBar(AppKit.NSObject):
         state_item = self._menu.itemWithTag_(100)
         if state_item is not None:
             state_item.setTitle_(label)
+
+    def openDashboard_(self, sender):
+        """Open the web dashboard in the browser."""
+        from birdword.web import open_dashboard
+        open_dashboard()
 
     def quit_(self, sender):
         """Handle quit menu item."""

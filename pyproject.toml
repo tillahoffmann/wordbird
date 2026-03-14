@@ -13,6 +13,7 @@ dependencies = [
     "pyobjc-framework-Cocoa",
     "pyobjc-framework-Quartz",
     "python-frontmatter",
+    "flask",
     "tomli; python_version < '3.11'",
 ]
 
