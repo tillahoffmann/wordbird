@@ -36,15 +36,26 @@ transcription_model: mlx-community/parakeet-tdt-0.6b-v2
 fix_model: mlx-community/Qwen2.5-1.5B-Instruct-4bit
 ---
 
-Fix transcription errors in the text below. Fix wrong words, punctuation,
-and capitalization. Keep wording as close to the original as possible.
-Output ONLY the corrected text. Do not add commentary or explanation.
+Fix transcription errors. Output only the corrected text.
+
+Example 1:
+Input: "the java script function isnt working"
+Output: "The JavaScript function isn't working."
+
+Example 2:
+Input: "check the get ignore file for the repo"
+Output: "Check the .gitignore file for the repo."
+
+Example 3:
+Input: "we need to refactor the a p i endpoint"
+Output: "We need to refactor the API endpoint."
 
 This is a Rust networking project using tokio and hyper.
 Key terms: epoll, mio, AsyncRead, TcpListener
 Names: Till
 
-{{ transcript }}
+Input: "{{ transcript }}"
+Output:
 ```
 
 The file is a [Jinja template](https://jinja.palletsprojects.com/). `{{ transcript }}` is replaced with the raw transcription. If omitted, the transcript is appended automatically.
