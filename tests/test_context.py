@@ -1,6 +1,8 @@
 """Tests for context detection."""
 
-from birdword.context import find_context_file
+import json
+
+from birdword.context import find_context_file, _read_active_context
 
 
 class TestFindContextFile:
@@ -16,3 +18,37 @@ class TestFindContextFile:
 
     def test_returns_none_when_not_found(self, tmp_path):
         assert find_context_file(str(tmp_path)) is None
+
+
+class TestActiveContext:
+    def test_reads_matching_pid(self, tmp_path, monkeypatch):
+        ctx = {"pid": 12345, "workspace": "/tmp/proj", "birdword_md": "Fix: {{ transcript }}"}
+        ctx_path = tmp_path / "active-context.json"
+        ctx_path.write_text(json.dumps(ctx))
+        monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
+
+        result = _read_active_context(12345)
+        assert result == "Fix: {{ transcript }}"
+
+    def test_ignores_mismatched_pid(self, tmp_path, monkeypatch):
+        ctx = {"pid": 12345, "workspace": "/tmp/proj", "birdword_md": "content"}
+        ctx_path = tmp_path / "active-context.json"
+        ctx_path.write_text(json.dumps(ctx))
+        monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
+
+        result = _read_active_context(99999)
+        assert result is None
+
+    def test_handles_missing_file(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(tmp_path / "nope.json"))
+        result = _read_active_context(12345)
+        assert result is None
+
+    def test_handles_no_birdword_md(self, tmp_path, monkeypatch):
+        ctx = {"pid": 12345, "workspace": "/tmp/proj", "birdword_md": None}
+        ctx_path = tmp_path / "active-context.json"
+        ctx_path.write_text(json.dumps(ctx))
+        monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
+
+        result = _read_active_context(12345)
+        assert result is None

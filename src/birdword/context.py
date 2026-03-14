@@ -1,9 +1,19 @@
 """Detect the focused app and resolve project context."""
 
+import json
 import os
 import subprocess
 
 import AppKit
+
+from birdword.config import CONFIG_DIR
+
+ACTIVE_CONTEXT_PATH = os.path.join(CONFIG_DIR, "active-context.json")
+
+_VSCODE_BUNDLE_IDS = {
+    "com.microsoft.VSCode",
+    "com.microsoft.VSCodeInsiders",
+}
 
 
 def get_frontmost_app() -> tuple[str, str]:
@@ -73,6 +83,24 @@ def get_terminal_cwd() -> str | None:
     return None
 
 
+def _read_active_context(frontmost_pid: int) -> str | None:
+    """Read BIRDWORD.md content from the active-context.json file.
+
+    Written by the VS Code extension. Only used if the PID in the file
+    matches the frontmost application's PID.
+    """
+    try:
+        with open(ACTIVE_CONTEXT_PATH) as f:
+            data = json.load(f)
+
+        if data.get("pid") != frontmost_pid:
+            return None
+
+        return data.get("birdword_md")
+    except Exception:
+        return None
+
+
 def find_context_file(start_dir: str) -> str | None:
     """Walk up from start_dir looking for a BIRDWORD.md file."""
     current = os.path.abspath(start_dir)
@@ -90,7 +118,9 @@ def find_context_file(start_dir: str) -> str | None:
 def get_context() -> tuple[str, str | None]:
     """Get current context: (app_name, BIRDWORD.md contents or None).
 
-    Only queries Terminal.app for cwd when Terminal is the focused app.
+    Resolves context from:
+    - Terminal.app: detects focused tab's shell cwd, walks up for BIRDWORD.md
+    - VS Code / Insiders: reads active-context.json written by the extension
     """
     bundle_id, app_name = get_frontmost_app()
 
@@ -106,5 +136,10 @@ def get_context() -> tuple[str, str | None]:
                         context_content = f.read()
                 except Exception:
                     pass
+
+    elif bundle_id in _VSCODE_BUNDLE_IDS:
+        workspace = AppKit.NSWorkspace.sharedWorkspace()
+        frontmost_pid = workspace.frontmostApplication().processIdentifier()
+        context_content = _read_active_context(frontmost_pid)
 
     return app_name, context_content
