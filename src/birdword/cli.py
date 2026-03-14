@@ -45,7 +45,7 @@ def _check_permissions() -> bool:
     from birdword.permissions import verify_permissions
 
     if not verify_permissions():
-        print("Fix permissions above, then try again.")
+        print("   Fix permissions above, then try again.")
         return False
     return True
 
@@ -54,7 +54,7 @@ def _run_daemon(args):
     """Run the daemon (blocking). Enforces singleton."""
     existing = _read_pid()
     if existing is not None:
-        print(f"birdword is already running (pid {existing}).")
+        print(f"🐦 Birdword is already running (pid {existing}).")
         sys.exit(1)
 
     if not _check_permissions():
@@ -64,7 +64,13 @@ def _run_daemon(args):
     try:
         from birdword.daemon import Daemon
 
-        daemon = Daemon(model_id=args.model, no_fix=args.no_fix)
+        daemon = Daemon(
+            model_id=args.model,
+            fix_model_id=args.fix_model,
+            no_fix=args.no_fix,
+            hold_key=args.hold_key,
+            toggle_key=args.toggle_key,
+        )
         daemon.run()
     finally:
         _remove_pid()
@@ -74,21 +80,27 @@ def _cmd_start(args):
     """Start birdword in the background."""
     existing = _read_pid()
     if existing is not None:
-        print(f"birdword is already running (pid {existing}).")
+        print(f"🐦 Birdword is already running (pid {existing}).")
         return
 
     # Check permissions in the foreground first
     if not _check_permissions():
         sys.exit(1)
 
-    print("Starting birdword in the background...")
+    print("🐦 Starting birdword in the background...")
 
     # Build the command to run ourselves in blocking mode
     cmd = [sys.executable, "-m", "birdword"]
     if args.model:
         cmd += ["--model", args.model]
+    if args.fix_model:
+        cmd += ["--fix-model", args.fix_model]
     if args.no_fix:
         cmd.append("--no-fix")
+    if args.hold_key != "rcmd":
+        cmd += ["--hold-key", args.hold_key]
+    if args.toggle_key != "space":
+        cmd += ["--toggle-key", args.toggle_key]
 
     # Launch detached subprocess
     log_path = os.path.expanduser("~/.birdword.log")
@@ -106,28 +118,28 @@ def _cmd_start(args):
     try:
         proc.wait(timeout=2)
         # If we get here, the process exited
-        print(f"birdword failed to start. Check {log_path}")
+        print(f"   ❌ Failed to start. Check {log_path}")
         sys.exit(1)
     except subprocess.TimeoutExpired:
         pass  # Still running — good
 
-    print(f"birdword started (pid {proc.pid}).")
-    print(f"Logs: {log_path}")
+    print(f"   ✅ Started (pid {proc.pid}).")
+    print(f"   📄 Logs: {log_path}")
 
 
 def _cmd_stop(args):
     """Stop birdword."""
     pid = _read_pid()
     if pid is None:
-        print("birdword is not running.")
+        print("🐦 Birdword is not running.")
         return
 
-    print(f"Stopping birdword (pid {pid})...")
+    print(f"🐦 Stopping birdword (pid {pid})...")
     try:
         os.kill(pid, signal.SIGTERM)
-        print("Stopped.")
+        print("   ✅ Stopped.")
     except ProcessLookupError:
-        print("Process already gone.")
+        print("   ⚠️  Process already gone.")
     _remove_pid()
 
 
@@ -135,9 +147,9 @@ def _cmd_status(args):
     """Check if birdword is running."""
     pid = _read_pid()
     if pid is not None:
-        print(f"birdword is running (pid {pid}).")
+        print(f"🐦 Birdword is running (pid {pid}).")
     else:
-        print("birdword is not running.")
+        print("🐦 Birdword is not running.")
 
 
 def main():
@@ -147,12 +159,27 @@ def main():
     parser.add_argument(
         "--model",
         default=None,
-        help="Model ID (default: mlx-community/parakeet-tdt-0.6b-v2)",
+        help="Transcription model (default: mlx-community/parakeet-tdt-0.6b-v2)",
+    )
+    parser.add_argument(
+        "--fix-model",
+        default=None,
+        help="Post-processor model (default: mlx-community/Qwen2.5-0.5B-Instruct-4bit)",
     )
     parser.add_argument(
         "--no-fix",
         action="store_true",
         help="Disable LLM post-processing of transcription",
+    )
+    parser.add_argument(
+        "--hold-key",
+        default="rcmd",
+        help="Hold key for record (default: rcmd). Options: rcmd, lcmd, ralt, lalt",
+    )
+    parser.add_argument(
+        "--toggle-key",
+        default="space",
+        help="Toggle key pressed with hold key (default: space)",
     )
 
     sub = parser.add_subparsers(dest="command")

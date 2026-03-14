@@ -8,7 +8,6 @@ dependencies = [
     "mlx-audio",
     "sounddevice",
     "numpy",
-    "pyautogui",
     "pyobjc-core",
     "pyobjc-framework-Cocoa",
     "pyobjc-framework-Quartz",

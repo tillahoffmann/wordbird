@@ -17,9 +17,9 @@ class Transcriber:
         """Pre-load the model into memory."""
         from mlx_audio.stt.utils import load_model
 
-        print(f"Loading model {self.model_id}...")
+        print(f"   🧠 Loading transcription model ({self.model_id})...")
         self._model = load_model(self.model_id)
-        print("Model loaded.")
+        print("   🧠 Transcription model ready.")
 
     def transcribe(self, wav_bytes: bytes) -> str:
         """Transcribe WAV audio bytes to text."""

@@ -14,12 +14,15 @@ class State(Enum):
     TRANSCRIBING = auto()
 
 
-# (SF Symbol name, tint color, menu label)
+def _rgb(r, g, b):
+    return AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(r/255, g/255, b/255, 1.0)
+
+
 _STATE_DISPLAY = {
-    State.IDLE: ("mic.fill", AppKit.NSColor.whiteColor(), "Idle"),
-    State.CONNECTING: ("mic.fill", AppKit.NSColor.orangeColor(), "Connecting mic…"),
-    State.LISTENING: ("mic.fill", AppKit.NSColor.redColor(), "Listening…"),
-    State.TRANSCRIBING: ("sparkles", AppKit.NSColor.systemYellowColor(), "Transcribing…"),
+    State.IDLE: ("bird.fill", AppKit.NSColor.whiteColor(), "Idle"),
+    State.CONNECTING: ("bird.fill", _rgb(255, 204, 0), "Connecting mic…"),
+    State.LISTENING: ("bird.fill", _rgb(255, 56, 60), "Listening…"),
+    State.TRANSCRIBING: ("sparkles", _rgb(255, 204, 0), "Transcribing…"),
 }
 
 

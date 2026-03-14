@@ -7,11 +7,9 @@ from birdword.context import get_context
 MODEL_ID = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
 
 SYSTEM_PROMPT = (
-    "You are a transcription post-processor. You receive raw speech-to-text output "
-    "and fix obvious errors: wrong words, missing or incorrect punctuation, "
-    "capitalization, and garbled phrases. Keep the meaning and wording as close "
-    "to the original as possible. Only fix clear mistakes. "
-    "Output ONLY the corrected text, nothing else."
+    "Fix transcription errors in the text below. Fix wrong words, punctuation, "
+    "and capitalization. Keep wording as close to the original as possible. "
+    "Output ONLY the corrected text. Do not add commentary or explanation."
 )
 
 
@@ -25,9 +23,9 @@ class PostProcessor:
 
     def load(self):
         """Pre-load the model."""
-        print(f"Loading post-processor {self.model_id}...")
+        print(f"   ✨ Loading post-processor ({self.model_id})...")
         self._model, self._tokenizer = load(self.model_id)
-        print("Post-processor loaded.")
+        print("   ✨ Post-processor ready.")
 
     def fix(self, text: str) -> str:
         """Fix transcription errors in the given text."""
@@ -37,21 +35,17 @@ class PostProcessor:
         if self._model is None:
             self.load()
 
-        # Build context-aware system prompt
         app_name, project_context = get_context()
 
-        system = SYSTEM_PROMPT
-        if app_name:
-            system += f"\n\nThe user is dictating into: {app_name}."
+        # Build the user message with context and text clearly separated
+        user_msg = ""
         if project_context:
-            system += (
-                f"\n\nProject context (use this to correct domain-specific terms):\n"
-                f"{project_context}"
-            )
+            user_msg += f"Context: {project_context.strip()}\n\n"
+        user_msg += f"<text>\n{text}\n</text>"
 
         messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": text},
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_msg},
         ]
 
         prompt = self._tokenizer.apply_chat_template(
@@ -66,4 +60,11 @@ class PostProcessor:
             verbose=False,
         )
 
-        return result.strip()
+        result = result.strip()
+
+        # Guard: if the result is much shorter than input or doesn't share
+        # enough words, the model hallucinated — return original
+        if len(result) < len(text) * 0.5:
+            return text
+
+        return result

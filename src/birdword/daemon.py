@@ -2,7 +2,6 @@
 
 import signal
 import threading
-import time
 
 import AppKit
 import Quartz
@@ -13,11 +12,38 @@ from birdword.recorder import Recorder
 from birdword.transcriber import Transcriber
 from birdword.typer import type_text
 
-# Keycodes
-KEYCODE_RIGHT_CMD = 54
-KEYCODE_SPACE = 49
+# macOS keycodes
+KEYCODES = {
+    "rcmd": 54, "lcmd": 55,
+    "ralt": 61, "lalt": 58,
+    "rshift": 60, "lshift": 56,
+    "rctrl": 62, "lctrl": 59,
+    "space": 49, "return": 36, "tab": 48,
+    "escape": 53,
+}
 
-# How long to hold Right Cmd before entering hold-to-record mode
+# Modifier key → CGEvent flag
+MODIFIER_FLAGS = {
+    "rcmd": Quartz.kCGEventFlagMaskCommand,
+    "lcmd": Quartz.kCGEventFlagMaskCommand,
+    "ralt": Quartz.kCGEventFlagMaskAlternate,
+    "lalt": Quartz.kCGEventFlagMaskAlternate,
+    "rshift": Quartz.kCGEventFlagMaskShift,
+    "lshift": Quartz.kCGEventFlagMaskShift,
+    "rctrl": Quartz.kCGEventFlagMaskControl,
+    "lctrl": Quartz.kCGEventFlagMaskControl,
+}
+
+# Pretty names for display
+KEY_LABELS = {
+    "rcmd": "Right ⌘", "lcmd": "Left ⌘",
+    "ralt": "Right ⌥", "lalt": "Left ⌥",
+    "rshift": "Right ⇧", "lshift": "Left ⇧",
+    "rctrl": "Right ⌃", "lctrl": "Left ⌃",
+    "space": "Space", "return": "Return", "tab": "Tab",
+    "escape": "Escape",
+}
+
 HOLD_THRESHOLD = 1.0
 
 
@@ -25,21 +51,37 @@ class Daemon:
     """Background dictation daemon.
 
     Two recording modes:
-    - Right Cmd + Space: toggle recording on/off
-    - Hold Right Cmd for >1s: records while held, transcribes on release
+    - Hold key + toggle key: toggle recording on/off
+    - Hold key for >1s: records while held, transcribes on release
     """
 
-    def __init__(self, model_id: str | None = None, no_fix: bool = False):
+    def __init__(
+        self,
+        model_id: str | None = None,
+        fix_model_id: str | None = None,
+        no_fix: bool = False,
+        hold_key: str = "rcmd",
+        toggle_key: str = "space",
+    ):
         self.recorder = Recorder()
         self.transcriber = Transcriber(model_id) if model_id else Transcriber()
-        self.postprocessor = None if no_fix else PostProcessor()
+        if no_fix:
+            self.postprocessor = None
+        elif fix_model_id:
+            self.postprocessor = PostProcessor(fix_model_id)
+        else:
+            self.postprocessor = PostProcessor()
+
+        self._hold_keycode = KEYCODES[hold_key]
+        self._hold_flag = MODIFIER_FLAGS[hold_key]
+        self._toggle_keycode = KEYCODES[toggle_key]
+        self._hold_key_label = KEY_LABELS.get(hold_key, hold_key)
+        self._toggle_key_label = KEY_LABELS.get(toggle_key, toggle_key)
         self.menubar = MenuBar.alloc().init()
         self.menubar.set_on_quit(self._on_quit)
         self._transcribing = False
 
-        # State for hold-to-record
         self._rcmd_down = False
-        self._rcmd_down_time: float | None = None
         self._hold_mode = False
         self._hold_timer: threading.Timer | None = None
 
@@ -50,14 +92,14 @@ class Daemon:
     def _start_recording(self):
         """Start recording if not already."""
         if self._transcribing:
-            print("  (still transcribing, please wait...)")
+            print("   ⏳ Still transcribing, please wait...")
             return
         if not self.recorder.is_recording:
             self._set_state(State.CONNECTING)
-            print("  Connecting mic...")
+            print("   🔌 Connecting mic...")
             self.recorder.start()
             self._set_state(State.LISTENING)
-            print("  Recording...")
+            print("   🎤 Recording...")
 
     def _stop_and_transcribe(self):
         """Stop recording and transcribe."""
@@ -66,11 +108,11 @@ class Daemon:
         if not self.recorder.is_recording:
             return
 
-        print("  Stopping recording...")
+        print("   ⏹️  Stopped recording.")
         wav_bytes = self.recorder.stop()
 
         if not wav_bytes:
-            print("  No audio captured.")
+            print("   ⚠️  No audio captured.")
             self._set_state(State.IDLE)
             return
 
@@ -81,33 +123,22 @@ class Daemon:
             daemon=True,
         ).start()
 
-    def _toggle_recording(self):
-        """Toggle recording on/off (for RCmd+Space mode)."""
-        if self._transcribing:
-            print("  (still transcribing, please wait...)")
-            return
-
-        if self.recorder.is_recording:
-            self._stop_and_transcribe()
-        else:
-            self._start_recording()
-
     def _transcribe_and_type(self, wav_bytes: bytes):
         """Transcribe audio and type the result."""
         self._transcribing = True
         try:
-            print("  Transcribing...")
+            print("   ✨ Transcribing...")
             text = self.transcriber.transcribe(wav_bytes)
             if text:
-                print(f"  Raw: {text[:80]}{'...' if len(text) > 80 else ''}")
+                print(f"   📝 Raw: {text[:80]}{'...' if len(text) > 80 else ''}")
                 if self.postprocessor:
                     text = self.postprocessor.fix(text)
-                    print(f"  Fixed: {text[:80]}{'...' if len(text) > 80 else ''}")
+                    print(f"   ✅ Fixed: {text[:80]}{'...' if len(text) > 80 else ''}")
                 type_text(text)
             else:
-                print("  (no speech detected)")
+                print("   🔇 No speech detected.")
         except Exception as e:
-            print(f"  Transcription error: {e}")
+            print(f"   ❌ Transcription error: {e}")
         finally:
             self._transcribing = False
             self._set_state(State.IDLE)
@@ -131,12 +162,11 @@ class Daemon:
             )
             flags = Quartz.CGEventGetFlags(event)
 
-            if keycode == KEYCODE_RIGHT_CMD:
-                cmd_pressed = bool(flags & Quartz.kCGEventFlagMaskCommand)
+            if keycode == self._hold_keycode:
+                cmd_pressed = bool(flags & self._hold_flag)
 
                 if cmd_pressed and not self._rcmd_down:
                     self._rcmd_down = True
-                    self._rcmd_down_time = time.monotonic()
                     self._hold_mode = False
 
                     self._hold_timer = threading.Timer(
@@ -155,18 +185,20 @@ class Daemon:
                         self._hold_mode = False
                         self._stop_and_transcribe()
 
-                    self._rcmd_down_time = None
 
         elif event_type == Quartz.kCGEventKeyDown:
             keycode = Quartz.CGEventGetIntegerValueField(
                 event, Quartz.kCGKeyboardEventKeycode
             )
 
-            if keycode == KEYCODE_SPACE and self._rcmd_down and not self._hold_mode:
+            if keycode == self._toggle_keycode and self._rcmd_down and not self._hold_mode:
                 if self._hold_timer is not None:
                     self._hold_timer.cancel()
                     self._hold_timer = None
-                self._toggle_recording()
+                if self.recorder.is_recording:
+                    self._stop_and_transcribe()
+                else:
+                    self._start_recording()
                 return None
 
         return event
@@ -183,11 +215,13 @@ class Daemon:
         if self.postprocessor:
             self.postprocessor.load()
 
-        print("\nbirdword is ready.")
-        print("  Right Cmd + Space: toggle recording on/off")
-        print("  Hold Right Cmd (>1s): record while held, transcribe on release")
-        print("  Transcribed text will be pasted into the focused app.")
-        print("  Press Ctrl+C to quit.\n")
+        hold = self._hold_key_label
+        toggle = self._toggle_key_label
+        print("\n🐦 Birdword is ready.\n")
+        print(f"   ⌨️  {hold} + {toggle} — toggle recording")
+        print(f"   ⌨️  Hold {hold} (>1s) — record while held")
+        print("   📋 Transcribed text is pasted into the focused app.")
+        print("   🛑 Ctrl+C to quit.\n")
 
         event_mask = (
             Quartz.CGEventMaskBit(Quartz.kCGEventKeyDown)
@@ -204,8 +238,8 @@ class Daemon:
         )
 
         if tap is None:
-            print("ERROR: Failed to create event tap.")
-            print("Make sure Terminal has Accessibility permission.")
+            print("   ❌ Failed to create event tap.")
+            print("   🔐 Make sure Terminal has Accessibility permission.")
             return
 
         run_loop_source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)
@@ -218,7 +252,7 @@ class Daemon:
 
         # Handle SIGTERM for clean shutdown via `birdword stop`
         def _handle_sigterm(signum, frame):
-            print("\nReceived SIGTERM, shutting down.")
+            print("\n🐦 Received SIGTERM, shutting down.")
             self._on_quit()
             Quartz.CFRunLoopStop(Quartz.CFRunLoopGetCurrent())
 
@@ -227,5 +261,5 @@ class Daemon:
         try:
             Quartz.CFRunLoopRun()
         except KeyboardInterrupt:
-            print("\nShutting down.")
+            print("\n🐦 Shutting down.")
             self._on_quit()
