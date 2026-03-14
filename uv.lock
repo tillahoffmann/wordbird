@@ -392,7 +392,7 @@ wheels = [
 ]
 
 [[package]]
-name = "birdword"
+name = "wordbird"
 version = "0.2.2"
 source = { editable = "." }
 dependencies = [

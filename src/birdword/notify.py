@@ -3,7 +3,7 @@
 import subprocess
 
 
-def notify(message: str, title: str = "Birdword"):
+def notify(message: str, title: str = "Wordbird"):
     """Show a macOS notification. Non-blocking, fire-and-forget."""
     try:
         subprocess.Popen(

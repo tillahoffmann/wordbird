@@ -6,7 +6,7 @@ import subprocess
 
 import AppKit
 
-from birdword.config import CONFIG_DIR
+from wordbird.config import CONFIG_DIR
 
 ACTIVE_CONTEXT_PATH = os.path.join(CONFIG_DIR, "active-context.json")
 
@@ -106,7 +106,7 @@ def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
     Written by the VS Code extension. Verified by checking that the PID
     in the file is a child process of the frontmost application.
 
-    Returns (workspace_path, birdword_md_content).
+    Returns (workspace_path, wordbird_md_content).
     """
     try:
         with open(ACTIVE_CONTEXT_PATH) as f:
@@ -116,7 +116,7 @@ def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
         if ctx_pid != frontmost_pid and not _is_child_of(ctx_pid, frontmost_pid):
             return None, None
 
-        return data.get("workspace"), data.get("birdword_md")
+        return data.get("workspace"), data.get("wordbird_md")
     except Exception:
         return None, None
 

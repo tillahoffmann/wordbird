@@ -6,14 +6,14 @@ import * as os from "os";
 const CONTEXT_PATH = path.join(
   os.homedir(),
   ".config",
-  "birdword",
+  "wordbird",
   "active-context.json"
 );
 
-interface BirdwordContext {
+interface WordbirdContext {
   pid: number;
   workspace: string | null;
-  birdword_md: string | null;
+  wordbird_md: string | null;
 }
 
 let fileWatcher: vscode.FileSystemWatcher | undefined;
@@ -65,21 +65,21 @@ async function writeContext(): Promise<void> {
   try {
     const folder = vscode.workspace.workspaceFolders?.[0];
 
-    let birdwordMd: string | null = null;
+    let wordbirdMd: string | null = null;
     if (folder) {
-      const birdwordUri = vscode.Uri.joinPath(folder.uri, "BIRDWORD.md");
+      const wordbirdUri = vscode.Uri.joinPath(folder.uri, "BIRDWORD.md");
       try {
-        const content = await vscode.workspace.fs.readFile(birdwordUri);
-        birdwordMd = Buffer.from(content).toString("utf-8");
+        const content = await vscode.workspace.fs.readFile(wordbirdUri);
+        wordbirdMd = Buffer.from(content).toString("utf-8");
       } catch {
         // File doesn't exist — that's fine
       }
     }
 
-    const ctx: BirdwordContext = {
+    const ctx: WordbirdContext = {
       pid: process.pid,
       workspace: folder?.uri.fsPath ?? null,
-      birdword_md: birdwordMd,
+      wordbird_md: wordbirdMd,
     };
 
     const dir = path.dirname(CONTEXT_PATH);

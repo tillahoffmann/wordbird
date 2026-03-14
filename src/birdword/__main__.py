@@ -1,5 +1,5 @@
-"""Allow running as python -m birdword."""
+"""Allow running as python -m wordbird."""
 
-from birdword.cli import main
+from wordbird.cli import main
 
 main()

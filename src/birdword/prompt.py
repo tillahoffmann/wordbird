@@ -34,7 +34,7 @@ Output:
 """
 
 
-def parse_birdword_md(content: str) -> tuple[dict, str]:
+def parse_wordbird_md(content: str) -> tuple[dict, str]:
     """Parse YAML front matter and body from a BIRDWORD.md file.
 
     Returns (metadata_dict, body_str).

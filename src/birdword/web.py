@@ -1,4 +1,4 @@
-"""Local web dashboard for birdword."""
+"""Local web dashboard for wordbird."""
 
 import os
 import threading
@@ -6,9 +6,9 @@ import webbrowser
 
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
-import birdword.config as bw_config
-from birdword.config import DEFAULTS
-from birdword.history import recent, stats
+import wordbird.config as bw_config
+from wordbird.config import DEFAULTS
+from wordbird.history import recent, stats
 
 PORT = 7870
 HOST = "127.0.0.1"

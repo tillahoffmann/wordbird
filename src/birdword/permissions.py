@@ -40,7 +40,7 @@ _CHECKS = [
 
 def verify_permissions() -> bool:
     """Check required macOS permissions. Returns True if all OK."""
-    print("🐦 Birdword, the contextual transcriber\n")
+    print("🦜 Wordbird, the contextual transcriber\n")
     print("   Checking permissions...\n")
 
     all_ok = True
@@ -56,7 +56,7 @@ def verify_permissions() -> bool:
             all_ok = False
             print(f"   {icon} {name} ✗ — {why}")
             print(f"      → {path}")
-            print(f"      → Add your terminal app, then restart birdword.")
+            print(f"      → Add your terminal app, then restart wordbird.")
 
     print()
     if all_ok:

@@ -2,14 +2,14 @@
 
 import pytest
 
-from birdword import history
+from wordbird import history
 
 
 @pytest.fixture(autouse=True)
 def use_temp_db(tmp_path, monkeypatch):
     """Point the database to a temp file."""
-    monkeypatch.setattr("birdword.history.DB_PATH", str(tmp_path / "test.db"))
-    monkeypatch.setattr("birdword.config.CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("wordbird.history.DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setattr("wordbird.config.CONFIG_DIR", str(tmp_path))
 
 
 class TestHistory:

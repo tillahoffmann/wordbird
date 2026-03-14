@@ -3,7 +3,7 @@
 Priority (highest to lowest):
 1. BIRDWORD.md front matter (per-project)
 2. CLI flags (per-session)
-3. ~/.config/birdword/config.toml (user defaults)
+3. ~/.config/wordbird/config.toml (user defaults)
 4. Built-in defaults
 """
 
@@ -18,13 +18,13 @@ else:
     except ImportError:
         import tomli as tomllib  # type: ignore[no-redef]
 
-from birdword.prompt import DEFAULT_FIX_MODEL, DEFAULT_TRANSCRIPTION_MODEL
+from wordbird.prompt import DEFAULT_FIX_MODEL, DEFAULT_TRANSCRIPTION_MODEL
 
-CONFIG_DIR = os.path.expanduser("~/.config/birdword")
+CONFIG_DIR = os.path.expanduser("~/.config/wordbird")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.toml")
-DB_PATH = os.path.join(CONFIG_DIR, "birdword.db")
-PIDFILE = os.path.join(CONFIG_DIR, "birdword.pid")
-LOG_PATH = os.path.join(CONFIG_DIR, "birdword.log")
+DB_PATH = os.path.join(CONFIG_DIR, "wordbird.db")
+PIDFILE = os.path.join(CONFIG_DIR, "wordbird.pid")
+LOG_PATH = os.path.join(CONFIG_DIR, "wordbird.log")
 
 DEFAULTS = {
     "hold_key": "rcmd",
@@ -35,8 +35,8 @@ DEFAULTS = {
 }
 
 DEFAULT_CONFIG_TOML = """\
-# Birdword configuration
-# See: https://github.com/tillahoffmann/birdword
+# Wordbird configuration
+# See: https://github.com/tillahoffmann/wordbird
 
 # hold_key = "rcmd"       # rcmd, lcmd, ralt, lalt, rshift, lshift, rctrl, lctrl
 # toggle_key = "space"    # space, return, tab, escape
@@ -52,7 +52,7 @@ def ensure_config_dir():
 
 
 def load_config() -> dict:
-    """Load config from ~/.config/birdword/config.toml.
+    """Load config from ~/.config/wordbird/config.toml.
 
     Returns a dict with only the keys the user has set.
     Missing keys are NOT filled with defaults — that's the caller's job.

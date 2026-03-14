@@ -1,16 +1,16 @@
 {
-  "name": "birdword",
-  "displayName": "Birdword",
-  "description": "Context bridge for Birdword voice dictation — connects your workspace to local speech-to-text",
+  "name": "wordbird",
+  "displayName": "Wordbird",
+  "description": "Context bridge for Wordbird voice dictation — connects your workspace to local speech-to-text",
   "version": "0.1.0",
   "publisher": "tillahoffmann",
-  "homepage": "https://github.com/tillahoffmann/birdword",
+  "homepage": "https://github.com/tillahoffmann/wordbird",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tillahoffmann/birdword.git"
+    "url": "https://github.com/tillahoffmann/wordbird.git"
   },
   "bugs": {
-    "url": "https://github.com/tillahoffmann/birdword/issues"
+    "url": "https://github.com/tillahoffmann/wordbird/issues"
   },
   "license": "MIT",
   "icon": "icon.png",

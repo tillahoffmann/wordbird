@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import datetime, timezone
 
-from birdword.config import DB_PATH, ensure_config_dir
+from wordbird.config import DB_PATH, ensure_config_dir
 
 _CREATE_TABLE = """\
 CREATE TABLE IF NOT EXISTS transcriptions (

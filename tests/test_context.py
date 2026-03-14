@@ -2,7 +2,7 @@
 
 import json
 
-from birdword.context import find_context_file, _read_active_context
+from wordbird.context import find_context_file, _read_active_context
 
 
 class TestFindContextFile:
@@ -22,36 +22,36 @@ class TestFindContextFile:
 
 class TestActiveContext:
     def test_reads_matching_pid(self, tmp_path, monkeypatch):
-        ctx = {"pid": 12345, "workspace": "/tmp/proj", "birdword_md": "Fix: {{ transcript }}"}
+        ctx = {"pid": 12345, "workspace": "/tmp/proj", "wordbird_md": "Fix: {{ transcript }}"}
         ctx_path = tmp_path / "active-context.json"
         ctx_path.write_text(json.dumps(ctx))
-        monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
+        monkeypatch.setattr("wordbird.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
 
         workspace, content = _read_active_context(12345)
         assert workspace == "/tmp/proj"
         assert content == "Fix: {{ transcript }}"
 
     def test_ignores_mismatched_pid(self, tmp_path, monkeypatch):
-        ctx = {"pid": 12345, "workspace": "/tmp/proj", "birdword_md": "content"}
+        ctx = {"pid": 12345, "workspace": "/tmp/proj", "wordbird_md": "content"}
         ctx_path = tmp_path / "active-context.json"
         ctx_path.write_text(json.dumps(ctx))
-        monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
+        monkeypatch.setattr("wordbird.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
 
         workspace, content = _read_active_context(99999)
         assert workspace is None
         assert content is None
 
     def test_handles_missing_file(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(tmp_path / "nope.json"))
+        monkeypatch.setattr("wordbird.context.ACTIVE_CONTEXT_PATH", str(tmp_path / "nope.json"))
         workspace, content = _read_active_context(12345)
         assert workspace is None
         assert content is None
 
-    def test_handles_no_birdword_md(self, tmp_path, monkeypatch):
-        ctx = {"pid": 12345, "workspace": "/tmp/proj", "birdword_md": None}
+    def test_handles_no_wordbird_md(self, tmp_path, monkeypatch):
+        ctx = {"pid": 12345, "workspace": "/tmp/proj", "wordbird_md": None}
         ctx_path = tmp_path / "active-context.json"
         ctx_path.write_text(json.dumps(ctx))
-        monkeypatch.setattr("birdword.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
+        monkeypatch.setattr("wordbird.context.ACTIVE_CONTEXT_PATH", str(ctx_path))
 
         workspace, content = _read_active_context(12345)
         assert workspace == "/tmp/proj"

@@ -3,8 +3,8 @@
 import jinja2
 from mlx_lm import load, generate
 
-from birdword.context import get_context
-from birdword.prompt import DEFAULT_FIX_MODEL, DEFAULT_TEMPLATE, parse_birdword_md
+from wordbird.context import get_context
+from wordbird.prompt import DEFAULT_FIX_MODEL, DEFAULT_TEMPLATE, parse_wordbird_md
 
 
 def render_prompt(template_str: str, transcript: str) -> str:
@@ -47,9 +47,9 @@ class PostProcessor:
         _, _, template_content = get_context()
 
         if template_content:
-            front_matter, body = parse_birdword_md(template_content)
+            front_matter, body = parse_wordbird_md(template_content)
         else:
-            front_matter, body = parse_birdword_md(DEFAULT_TEMPLATE)
+            front_matter, body = parse_wordbird_md(DEFAULT_TEMPLATE)
 
         # CLI flag overrides front matter
         fix_model = self._cli_model_id or front_matter.get("fix_model", DEFAULT_FIX_MODEL)

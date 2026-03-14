@@ -7,14 +7,14 @@ import AppKit
 import Foundation
 import Quartz
 
-from birdword.history import record as record_transcription
-from birdword.menubar import MenuBar, State
-from birdword.notify import notify
-from birdword.overlay import Overlay
-from birdword.postprocess import PostProcessor
-from birdword.recorder import Recorder
-from birdword.transcriber import Transcriber
-from birdword.typer import type_text
+from wordbird.history import record as record_transcription
+from wordbird.menubar import MenuBar, State
+from wordbird.notify import notify
+from wordbird.overlay import Overlay
+from wordbird.postprocess import PostProcessor
+from wordbird.recorder import Recorder
+from wordbird.transcriber import Transcriber
+from wordbird.typer import type_text
 
 # macOS keycodes
 KEYCODES = {
@@ -171,13 +171,13 @@ class Daemon:
         self._transcribing = True
         self._cancelled = False
         try:
-            from birdword.context import get_context
-            from birdword.prompt import parse_birdword_md
+            from wordbird.context import get_context
+            from wordbird.prompt import parse_wordbird_md
 
             app_name, cwd, template_content = get_context()
             front_matter = {}
             if template_content:
-                front_matter, _ = parse_birdword_md(template_content)
+                front_matter, _ = parse_wordbird_md(template_content)
 
             transcription_model = front_matter.get("transcription_model")
 
@@ -330,13 +330,13 @@ class Daemon:
         if self.postprocessor:
             self.postprocessor.load()
 
-        from birdword.web import start_server
+        from wordbird.web import start_server
         dashboard_url = start_server(daemon=self)
 
         hold = self._hold_key_label
         toggle = self._toggle_key_label
 
-        print("\n🐦 Birdword is ready.\n")
+        print("\n🦜 Wordbird is ready.\n")
         print(f"   🌐 Dashboard: {dashboard_url}")
         print(f"   ⌨️  {hold} + {toggle} — toggle recording")
         print(f"   ⌨️  Hold {hold} (>1s) — record while held")
@@ -373,7 +373,7 @@ class Daemon:
 
         def _handle_shutdown(signum, frame):
             signame = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
-            print(f"\n🐦 Received {signame}, shutting down.")
+            print(f"\n🦜 Received {signame}, shutting down.")
             self._on_quit()
             app.terminate_(None)
 

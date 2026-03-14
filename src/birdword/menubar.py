@@ -160,7 +160,7 @@ class MenuBar(AppKit.NSObject):
         self._menu.addItem_(AppKit.NSMenuItem.separatorItem())
 
         quit_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-            "Quit birdword", "quit:", "q"
+            "Quit wordbird", "quit:", "q"
         )
         quit_item.setTarget_(self)
         self._menu.addItem_(quit_item)
@@ -276,7 +276,7 @@ class MenuBar(AppKit.NSObject):
 
     def copyLast_(self, sender):
         """Copy the last transcription to the clipboard."""
-        from birdword.history import recent
+        from wordbird.history import recent
         rows = recent(limit=1)
         if rows:
             text = rows[0].get("fixed_text") or rows[0].get("raw_text", "")
@@ -286,7 +286,7 @@ class MenuBar(AppKit.NSObject):
 
     def openDashboard_(self, sender):
         """Open the web dashboard in the browser."""
-        from birdword.web import open_dashboard
+        from wordbird.web import open_dashboard
         open_dashboard()
 
     def quit_(self, sender):

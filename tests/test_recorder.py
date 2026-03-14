@@ -6,7 +6,7 @@ import wave
 import numpy as np
 import pytest
 
-from birdword.recorder import Recorder, SAMPLE_RATE
+from wordbird.recorder import Recorder, SAMPLE_RATE
 
 
 class TestRecorder:

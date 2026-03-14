@@ -1,24 +1,24 @@
 """Tests for prompt template parsing and rendering."""
 
-from birdword.postprocess import render_prompt
-from birdword.prompt import DEFAULT_TEMPLATE, parse_birdword_md
+from wordbird.postprocess import render_prompt
+from wordbird.prompt import DEFAULT_TEMPLATE, parse_wordbird_md
 
 
-class TestParseBirdwordMd:
+class TestParseWordbirdMd:
     def test_parse_default_template(self):
-        meta, body = parse_birdword_md(DEFAULT_TEMPLATE)
+        meta, body = parse_wordbird_md(DEFAULT_TEMPLATE)
         assert meta["transcription_model"] == "mlx-community/parakeet-tdt-0.6b-v2"
         assert meta["fix_model"] == "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
         assert "transcript" in body
 
     def test_parse_no_front_matter(self):
-        meta, body = parse_birdword_md("Just some text")
+        meta, body = parse_wordbird_md("Just some text")
         assert meta == {}
         assert body == "Just some text"
 
     def test_parse_custom_front_matter(self):
         content = "---\nfix_model: custom/model\n---\nHello {{ transcript }}"
-        meta, body = parse_birdword_md(content)
+        meta, body = parse_wordbird_md(content)
         assert meta["fix_model"] == "custom/model"
         assert "Hello" in body
 

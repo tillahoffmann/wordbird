@@ -2,14 +2,14 @@
 
 import pytest
 
-from birdword.web import create_app
+from wordbird.web import create_app
 
 
 @pytest.fixture(autouse=True)
 def use_temp_paths(tmp_path, monkeypatch):
-    monkeypatch.setattr("birdword.config.CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr("birdword.config.CONFIG_PATH", str(tmp_path / "config.toml"))
-    monkeypatch.setattr("birdword.history.DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setattr("wordbird.config.CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("wordbird.config.CONFIG_PATH", str(tmp_path / "config.toml"))
+    monkeypatch.setattr("wordbird.history.DB_PATH", str(tmp_path / "test.db"))
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ class TestWeb:
     def test_index_loads(self, client):
         resp = client.get("/")
         assert resp.status_code == 200
-        assert b"Birdword" in resp.data
+        assert b"Wordbird" in resp.data
         assert b"settings-modal" in resp.data
 
     def test_config_save_via_api(self, client):
@@ -37,13 +37,13 @@ class TestWeb:
         assert resp.status_code == 200
         assert resp.json["ok"] is True
 
-        from birdword.config import load_config
+        from wordbird.config import load_config
         cfg = load_config()
         assert cfg["hold_key"] == "lalt"
         assert cfg["toggle_key"] == "return"
 
     def test_history_shows_transcriptions(self, client):
-        from birdword.history import record
+        from wordbird.history import record
         record(raw_text="test transcript", fixed_text="Test transcript.")
 
         resp = client.get("/")

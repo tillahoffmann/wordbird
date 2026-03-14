@@ -1,4 +1,4 @@
-"""CLI entry point for birdword."""
+"""CLI entry point for wordbird."""
 
 import argparse
 import os
@@ -6,7 +6,7 @@ import signal
 import subprocess
 import sys
 
-from birdword.config import (
+from wordbird.config import (
     CONFIG_PATH,
     DEFAULTS,
     DEFAULT_CONFIG_TOML,
@@ -46,7 +46,7 @@ def _remove_pid():
 
 
 def _check_permissions() -> bool:
-    from birdword.permissions import verify_permissions
+    from wordbird.permissions import verify_permissions
 
     if not verify_permissions():
         print("   Fix permissions above, then try again.")
@@ -74,7 +74,7 @@ def _run_daemon(args):
     """Run the daemon (blocking). Enforces singleton."""
     existing = _read_pid()
     if existing is not None:
-        print(f"🐦 Birdword is already running (pid {existing}).")
+        print(f"🦜 Wordbird is already running (pid {existing}).")
         sys.exit(1)
 
     if not _check_permissions():
@@ -82,8 +82,8 @@ def _run_daemon(args):
 
     _write_pid()
     try:
-        from birdword.config import resolve
-        from birdword.daemon import Daemon
+        from wordbird.config import resolve
+        from wordbird.daemon import Daemon
 
         cli = _cli_overrides(args)
         cfg = resolve(cli)
@@ -101,18 +101,18 @@ def _run_daemon(args):
 
 
 def _cmd_start(args):
-    """Start birdword in the background."""
+    """Start wordbird in the background."""
     existing = _read_pid()
     if existing is not None:
-        print(f"🐦 Birdword is already running (pid {existing}).")
+        print(f"🦜 Wordbird is already running (pid {existing}).")
         return
 
     if not _check_permissions():
         sys.exit(1)
 
-    print("🐦 Starting birdword in the background...")
+    print("🦜 Starting wordbird in the background...")
 
-    cmd = [sys.executable, "-m", "birdword"]
+    cmd = [sys.executable, "-m", "wordbird"]
     if args.model:
         cmd += ["--model", args.model]
     if args.fix_model:
@@ -149,10 +149,10 @@ def _cmd_start(args):
 def _cmd_stop(args):
     pid = _read_pid()
     if pid is None:
-        print("🐦 Birdword is not running.")
+        print("🦜 Wordbird is not running.")
         return
 
-    print(f"🐦 Stopping birdword (pid {pid})...")
+    print(f"🦜 Stopping wordbird (pid {pid})...")
     try:
         os.kill(pid, signal.SIGTERM)
         print("   ✅ Stopped.")
@@ -164,13 +164,13 @@ def _cmd_stop(args):
 def _cmd_status(args):
     pid = _read_pid()
     if pid is not None:
-        print(f"🐦 Birdword is running (pid {pid}).")
+        print(f"🦜 Wordbird is running (pid {pid}).")
     else:
-        print("🐦 Birdword is not running.")
+        print("🦜 Wordbird is not running.")
 
 
 def _cmd_init(args):
-    from birdword.prompt import DEFAULT_TEMPLATE
+    from wordbird.prompt import DEFAULT_TEMPLATE
 
     path = os.path.join(os.getcwd(), "BIRDWORD.md")
     if os.path.exists(path):
@@ -206,11 +206,11 @@ def _cmd_config(args):
 
 
 def _cmd_history(args):
-    from birdword.history import recent
+    from wordbird.history import recent
 
     rows = recent(limit=args.limit)
     if not rows:
-        print("🐦 No transcription history.")
+        print("🦜 No transcription history.")
         return
 
     for row in reversed(rows):
@@ -247,9 +247,9 @@ def main():
 
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("init", help="Create a BIRDWORD.md in the current directory")
-    sub.add_parser("start", help="Start birdword in the background")
-    sub.add_parser("stop", help="Stop birdword")
-    sub.add_parser("status", help="Check if birdword is running")
+    sub.add_parser("start", help="Start wordbird in the background")
+    sub.add_parser("stop", help="Stop wordbird")
+    sub.add_parser("status", help="Check if wordbird is running")
     sub.add_parser("config", help="Show or create the config file")
 
     history_parser = sub.add_parser("history", help="Show transcription history")

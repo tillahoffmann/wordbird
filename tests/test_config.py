@@ -5,13 +5,13 @@ import tempfile
 
 import pytest
 
-from birdword.config import DEFAULTS, resolve
+from wordbird.config import DEFAULTS, resolve
 
 
 @pytest.fixture
 def config_dir(tmp_path, monkeypatch):
     """Point config to a temp directory."""
-    monkeypatch.setattr("birdword.config.CONFIG_PATH", str(tmp_path / "config.toml"))
+    monkeypatch.setattr("wordbird.config.CONFIG_PATH", str(tmp_path / "config.toml"))
     return tmp_path
 
 

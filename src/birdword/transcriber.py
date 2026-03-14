@@ -3,7 +3,7 @@
 import os
 import tempfile
 
-from birdword.prompt import DEFAULT_TRANSCRIPTION_MODEL
+from wordbird.prompt import DEFAULT_TRANSCRIPTION_MODEL
 
 
 class Transcriber:

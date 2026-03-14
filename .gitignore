@@ -15,5 +15,6 @@ vscode/out/
 vscode/*.vsix
 vscode/package-lock.json
 
-# macOS
+# other
 .DS_Store
+.vscode/
