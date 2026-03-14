@@ -33,7 +33,7 @@ This creates a `BIRDWORD.md` with the default prompt template. Edit it to add yo
 ```markdown
 ---
 transcription_model: mlx-community/parakeet-tdt-0.6b-v2
-fix_model: mlx-community/Qwen2.5-0.5B-Instruct-4bit
+fix_model: mlx-community/Qwen2.5-1.5B-Instruct-4bit
 ---
 
 Fix transcription errors in the text below. Fix wrong words, punctuation,
@@ -69,7 +69,7 @@ Hotkeys are configurable:
 
 ```
 --model MODEL        Transcription model (default: mlx-community/parakeet-tdt-0.6b-v2)
---fix-model MODEL    Post-processor model (default: mlx-community/Qwen2.5-0.5B-Instruct-4bit)
+--fix-model MODEL    Post-processor model (default: mlx-community/Qwen2.5-1.5B-Instruct-4bit)
 --no-fix             Disable LLM post-processing
 ```
 

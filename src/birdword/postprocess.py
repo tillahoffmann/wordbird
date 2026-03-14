@@ -76,6 +76,11 @@ class PostProcessor:
 
         result = result.strip()
 
+        # Strip surrounding quotes (few-shot format causes the model to quote output)
+        if len(result) >= 2 and result[0] == '"' and result[-1] == '"':
+            result = result[1:-1]
+
+        # Guard: if result is much shorter, the model hallucinated
         if len(result) < len(text) * 0.5:
             return text, front_matter
 
