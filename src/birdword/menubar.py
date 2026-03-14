@@ -19,12 +19,8 @@ def _rgb(r, g, b):
     return AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(r/255, g/255, b/255, 1.0)
 
 
-_STATE_COLORS = {
-    State.IDLE: None,  # None = use template (adapts to menu bar)
-    State.CONNECTING: _rgb(255, 204, 0),
-    State.LISTENING: _rgb(255, 56, 60),
-    State.TRANSCRIBING: _rgb(255, 204, 0),
-}
+# Parrot icon for idle/connecting/listening; sparkles for transcribing
+_ICON_SVG = os.path.join(os.path.dirname(__file__), "icon.svg")
 
 _STATE_LABELS = {
     State.IDLE: "Idle",
@@ -33,14 +29,12 @@ _STATE_LABELS = {
     State.TRANSCRIBING: "Transcribing…",
 }
 
-_ICON_SVG = os.path.join(os.path.dirname(__file__), "icon.svg")
 
-
-def _load_icon(color: AppKit.NSColor | None = None, size: float = 18.0):
+def _load_parrot_icon(color: AppKit.NSColor | None = None, size: float = 18.0):
     """Load the parrot SVG icon for the menu bar.
 
     If color is None, returns a template image (adapts to menu bar theme).
-    If color is set, tints the icon to that color.
+    If color is set, tints the solid parts to that color.
     """
     base = AppKit.NSImage.alloc().initWithContentsOfFile_(_ICON_SVG)
     if base is None:
@@ -66,6 +60,35 @@ def _load_icon(color: AppKit.NSColor | None = None, size: float = 18.0):
 
     result.unlockFocus()
     result.setTemplate_(color is None)
+    return result
+
+
+def _tinted_sf_symbol(name: str, color: AppKit.NSColor, size: float = 16.0):
+    """Load an SF Symbol tinted to the given color."""
+    base = AppKit.NSImage.imageWithSystemSymbolName_accessibilityDescription_(name, None)
+    if base is None:
+        return None
+
+    config = AppKit.NSImageSymbolConfiguration.configurationWithPointSize_weight_(
+        size, AppKit.NSFontWeightRegular
+    )
+    sized = base.imageWithSymbolConfiguration_(config)
+    if sized is None:
+        sized = base
+
+    target_size = sized.size()
+    result = AppKit.NSImage.alloc().initWithSize_(target_size)
+    result.lockFocus()
+
+    color.set()
+    rect = AppKit.NSMakeRect(0, 0, target_size.width, target_size.height)
+    sized.drawInRect_fromRect_operation_fraction_(
+        rect, rect, AppKit.NSCompositeSourceOver, 1.0,
+    )
+    AppKit.NSRectFillUsingOperation(rect, AppKit.NSCompositeSourceAtop)
+
+    result.unlockFocus()
+    result.setTemplate_(False)
     return result
 
 
@@ -139,12 +162,20 @@ class MenuBar(AppKit.NSObject):
     @objc.python_method
     def _apply_state(self, state: State):
         """Actually update the UI. Must be called on the main thread."""
-        color = _STATE_COLORS[state]
         label = _STATE_LABELS[state]
-
         button = self._status_item.button()
 
-        image = _load_icon(color)
+        if state == State.TRANSCRIBING:
+            image = _tinted_sf_symbol("sparkles", _rgb(255, 204, 0))
+        elif state == State.IDLE:
+            image = _load_parrot_icon()
+        elif state == State.CONNECTING:
+            image = _load_parrot_icon(color=_rgb(255, 204, 0))
+        elif state == State.LISTENING:
+            image = _load_parrot_icon(color=_rgb(255, 56, 60))
+        else:
+            image = None
+
         if image is not None:
             button.setImage_(image)
             button.setTitle_("")

@@ -36,44 +36,55 @@ class Recorder:
         # Rolling pre-roll buffer (fixed number of chunks)
         max_chunks = math.ceil(PREROLL_SECONDS * sample_rate / BLOCK_SIZE)
         self._preroll: collections.deque[np.ndarray] = collections.deque(maxlen=max_chunks)
-        self._listening = False  # True when mic stream is open
+        self._listening = False
+        self._device_id: int | None = None  # track which device the stream is on
 
     @property
     def is_recording(self) -> bool:
         return self._recording
 
+    def _current_default_device(self) -> int:
+        """Get the current default input device index."""
+        return sd.default.device[0] or sd.query_devices(kind="input")["index"]
+
     def open_mic(self):
-        """Open the mic stream for pre-roll buffering. Does not start recording."""
+        """Open the mic stream for pre-roll buffering. Does not start recording.
+
+        If the default input device has changed since the last open,
+        closes and reopens on the new device.
+        """
         with self._lock:
+            current_device = self._current_default_device()
+
+            # Reopen if device changed
+            if self._listening and self._device_id != current_device:
+                self._stream.stop()
+                self._stream.close()
+                self._stream = None
+                self._listening = False
+                self._preroll.clear()
+
             if self._listening:
                 return
+
             self._stream = sd.InputStream(
                 samplerate=self.sample_rate,
                 channels=CHANNELS,
                 dtype=DTYPE,
                 blocksize=BLOCK_SIZE,
                 callback=self._callback,
+                device=current_device,
             )
             self._stream.start()
+            self._device_id = current_device
             self._listening = True
 
     def start(self):
         """Start recording. Includes pre-roll audio from before this call."""
+        self.open_mic()  # ensures mic is open on the current default device
         with self._lock:
             if self._recording:
                 return
-            # If mic isn't open yet, open it now
-            if not self._listening:
-                self._stream = sd.InputStream(
-                    samplerate=self.sample_rate,
-                    channels=CHANNELS,
-                    dtype=DTYPE,
-                    blocksize=BLOCK_SIZE,
-                    callback=self._callback,
-                )
-                self._stream.start()
-                self._listening = True
-            # Grab pre-roll and start collecting
             self._chunks = list(self._preroll)
             self._recording = True
 
