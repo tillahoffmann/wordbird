@@ -87,6 +87,19 @@ Hotkeys are configurable:
 --no-fix             Disable LLM post-processing
 ```
 
+## Dashboard
+
+Birdword runs a local web dashboard at [localhost:7870](http://localhost:7870). Click the bird in the menu bar → **Dashboard…** to open it.
+
+- 📝 **History** — browse all your transcriptions with timestamps, app name, working directory, and duration. See both the original and corrected text.
+- ⚙️ **Settings** — configure hotkeys, models, and post-processing. Changes take effect immediately without restarting.
+
+You can also view history from the command line:
+
+```bash
+uvx birdword history
+```
+
 ## Menu bar
 
 Birdword shows a bird icon in the menu bar:
