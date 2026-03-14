@@ -62,6 +62,7 @@ class Overlay(Foundation.NSObject):
         self._cancel_callback = None
         self._tick = 0
         self._recording_timer = None
+        self._recording_start = 0  # tick count when recording started
         return self
 
     @objc.python_method
@@ -117,7 +118,7 @@ class Overlay(Foundation.NSObject):
         bar_w = 3
         bar_gap = 2
         total_bars_w = num_bars * bar_w + (num_bars - 1) * bar_gap
-        bars_x = (PILL_W - total_bars_w) / 2
+        bars_x = 80  # after record icon + timer label
         max_bar_h = 20
         self._wave_bars = []
         for i in range(num_bars):
@@ -131,6 +132,20 @@ class Overlay(Foundation.NSObject):
             self._wave_bars.append(bar)
         self._bars_y_base = (PILL_H - max_bar_h) / 2
         self._max_bar_h = max_bar_h
+
+        # Recording timer label (next to record icon)
+        timer_w = 44
+        label_h = 18
+        self._timer_label = NSTextField.labelWithString_("")
+        self._timer_label.setFrame_(((32, (PILL_H - label_h) / 2 - 1.5), (timer_w, label_h)))
+        self._timer_label.setAlignment_(NSTextAlignmentCenter)
+        self._timer_label.setFont_(NSFont.monospacedDigitSystemFontOfSize_weight_(12, NSFontWeightMedium))
+        self._timer_label.setTextColor_(RED)
+        self._timer_label.setBackgroundColor_(NSColor.clearColor())
+        self._timer_label.setBezeled_(False)
+        self._timer_label.setEditable_(False)
+        self._timer_label.setHidden_(True)
+        content.addSubview_(self._timer_label)
 
         # Stop button (right side, X icon)
         btn_size = 20
@@ -164,6 +179,7 @@ class Overlay(Foundation.NSObject):
         self._label.setStringValue_(text)
         self._label.setHidden_(False)
         self._stop_button.setHidden_(not cancellable)
+        self._timer_label.setHidden_(True)
         self._window.setIgnoresMouseEvents_(not cancellable)
         for bar in self._wave_bars:
             bar.setHidden_(True)
@@ -174,6 +190,7 @@ class Overlay(Foundation.NSObject):
         self._icon_view.setImage_(_sf_image("record.circle", color=RED))
         self._icon_view.setHidden_(False)
         self._label.setHidden_(True)
+        self._timer_label.setHidden_(False)
         self._stop_button.setHidden_(False)
         self._window.setIgnoresMouseEvents_(False)
         for bar in self._wave_bars:
@@ -243,6 +260,7 @@ class Overlay(Foundation.NSObject):
         self._window.setAlphaValue_(1.0)
         self._window.orderFrontRegardless()
         self._tick = 0
+        self._recording_start = self._tick
         self._recording_timer = Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             0.1, self, "tickRecording:", None, True
         )
@@ -251,6 +269,12 @@ class Overlay(Foundation.NSObject):
         level = self._level_callback() if self._level_callback else 0
         self._show_waveform()
         self._update_waveform(level)
+        # Update recording duration
+        elapsed = (self._tick - self._recording_start) / 10.0
+        mins = int(elapsed) // 60
+        secs = int(elapsed) % 60
+        self._timer_label.setStringValue_(f"{mins:02d}:{secs:02d}")
+        self._tick += 1
 
     @objc.python_method
     def show_transcribing(self):
