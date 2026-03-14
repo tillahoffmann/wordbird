@@ -26,8 +26,8 @@ Input: "we need to refactor the a p i endpoint"
 Output: "We need to refactor the API endpoint."
 
 {# Add project-specific context below. For example: #}
-{# Key terms: tokio, hyper, axum, AsyncRead, TcpListener #}
-{# Names: Till #}
+{# Key terms: MyClass, some_function, PostgreSQL #}
+{# Names: Alice, Bob #}
 
 Input: "{{ transcript }}"
 Output:
