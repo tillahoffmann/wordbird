@@ -83,17 +83,35 @@ def get_terminal_cwd() -> str | None:
     return None
 
 
+def _is_child_of(child_pid: int, parent_pid: int) -> bool:
+    """Check if child_pid is a descendant of parent_pid."""
+    try:
+        result = subprocess.run(
+            ["ps", "-o", "ppid=", "-p", str(child_pid)],
+            capture_output=True, text=True, timeout=2,
+        )
+        ppid = int(result.stdout.strip())
+        if ppid == parent_pid:
+            return True
+        if ppid <= 1:
+            return False
+        return _is_child_of(ppid, parent_pid)
+    except Exception:
+        return False
+
+
 def _read_active_context(frontmost_pid: int) -> str | None:
     """Read BIRDWORD.md content from the active-context.json file.
 
-    Written by the VS Code extension. Only used if the PID in the file
-    matches the frontmost application's PID.
+    Written by the VS Code extension. Verified by checking that the PID
+    in the file is a child process of the frontmost application.
     """
     try:
         with open(ACTIVE_CONTEXT_PATH) as f:
             data = json.load(f)
 
-        if data.get("pid") != frontmost_pid:
+        ctx_pid = data.get("pid")
+        if ctx_pid != frontmost_pid and not _is_child_of(ctx_pid, frontmost_pid):
             return None
 
         return data.get("birdword_md")
