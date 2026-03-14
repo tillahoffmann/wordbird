@@ -39,7 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Watch BIRDWORD.md for changes
+  // Watch WORDBIRD.md for changes
   setupFileWatcher(context);
 }
 
@@ -51,7 +51,7 @@ function setupFileWatcher(context: vscode.ExtensionContext) {
     return;
   }
 
-  const pattern = new vscode.RelativePattern(folders[0], "BIRDWORD.md");
+  const pattern = new vscode.RelativePattern(folders[0], "WORDBIRD.md");
   fileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
   fileWatcher.onDidChange(() => writeContext().catch(() => {}));
@@ -67,7 +67,7 @@ async function writeContext(): Promise<void> {
 
     let wordbirdMd: string | null = null;
     if (folder) {
-      const wordbirdUri = vscode.Uri.joinPath(folder.uri, "BIRDWORD.md");
+      const wordbirdUri = vscode.Uri.joinPath(folder.uri, "WORDBIRD.md");
       try {
         const content = await vscode.workspace.fs.readFile(wordbirdUri);
         wordbirdMd = Buffer.from(content).toString("utf-8");

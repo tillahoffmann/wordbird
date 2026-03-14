@@ -8,7 +8,7 @@ from wordbird.prompt import DEFAULT_FIX_MODEL, DEFAULT_TEMPLATE, parse_wordbird_
 
 
 def render_prompt(template_str: str, transcript: str) -> str:
-    """Render a BIRDWORD.md template body with the transcript.
+    """Render a WORDBIRD.md template body with the transcript.
 
     If {{ transcript }} is not found in the template, append the transcript.
     """

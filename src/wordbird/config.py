@@ -1,7 +1,7 @@
 """Configuration management.
 
 Priority (highest to lowest):
-1. BIRDWORD.md front matter (per-project)
+1. WORDBIRD.md front matter (per-project)
 2. CLI flags (per-session)
 3. ~/.config/wordbird/config.toml (user defaults)
 4. Built-in defaults
@@ -67,7 +67,7 @@ def load_config() -> dict:
 def resolve(cli_args: dict, front_matter: dict | None = None) -> dict:
     """Resolve configuration with correct priority.
 
-    Priority: BIRDWORD.md > CLI flags > config.toml > defaults.
+    Priority: WORDBIRD.md > CLI flags > config.toml > defaults.
     """
     file_config = load_config()
 
@@ -85,7 +85,7 @@ def resolve(cli_args: dict, front_matter: dict | None = None) -> dict:
         if cli_val is not None and cli_val is not False:
             value = cli_val
 
-        # Override with BIRDWORD.md front matter (highest priority)
+        # Override with WORDBIRD.md front matter (highest priority)
         if front_matter and key in front_matter:
             value = front_matter[key]
 

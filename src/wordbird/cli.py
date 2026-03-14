@@ -172,7 +172,7 @@ def _cmd_status(args):
 def _cmd_init(args):
     from wordbird.prompt import DEFAULT_TEMPLATE
 
-    path = os.path.join(os.getcwd(), "BIRDWORD.md")
+    path = os.path.join(os.getcwd(), "WORDBIRD.md")
     if os.path.exists(path):
         print(f"   ⚠️  {path} already exists.")
         return
@@ -246,7 +246,7 @@ def main():
     )
 
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("init", help="Create a BIRDWORD.md in the current directory")
+    sub.add_parser("init", help="Create a WORDBIRD.md in the current directory")
     sub.add_parser("start", help="Start wordbird in the background")
     sub.add_parser("stop", help="Stop wordbird")
     sub.add_parser("status", help="Check if wordbird is running")

@@ -2,7 +2,7 @@
 
 Contextual voice dictation for macOS. Powered by [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) running locally on Apple Silicon via [MLX](https://github.com/ml-explore/mlx).
 
-Press a hotkey, speak, and your words are transcribed and pasted into whatever app is focused. A small LLM post-processes the transcription to fix errors, using project-specific context from a `BIRDWORD.md` file.
+Press a hotkey, speak, and your words are transcribed and pasted into whatever app is focused. A small LLM post-processes the transcription to fix errors, using project-specific context from a `WORDBIRD.md` file.
 
 ## Getting started
 
@@ -20,7 +20,7 @@ uvx wordbird status
 
 ## Context-aware correction
 
-The key idea behind wordbird is **contextual transcription correction**. When dictating into **Terminal.app**, wordbird detects the focused tab's working directory and looks for a `BIRDWORD.md` file up the directory tree. This lets you teach wordbird your project's domain:
+The key idea behind wordbird is **contextual transcription correction**. When dictating into **Terminal.app**, wordbird detects the focused tab's working directory and looks for a `WORDBIRD.md` file up the directory tree. This lets you teach wordbird your project's domain:
 
 Context detection works with:
 - **Terminal.app** — detects the focused tab's shell working directory
@@ -32,7 +32,7 @@ Transcription and pasting work in any app.
 uvx wordbird init
 ```
 
-This creates a `BIRDWORD.md` with the default prompt template. Edit it to add your project's terms, names, and jargon:
+This creates a `WORDBIRD.md` with the default prompt template. Edit it to add your project's terms, names, and jargon:
 
 ```markdown
 ---
@@ -63,7 +63,7 @@ Output:
 
 The file is a [Jinja template](https://jinja.palletsprojects.com/). `{{ transcript }}` is replaced with the raw transcription. If omitted, the transcript is appended automatically.
 
-The YAML front matter lets you override models per-project. When you dictate into a Terminal tab whose shell is in that directory (or a child), wordbird picks up the nearest `BIRDWORD.md` and uses it.
+The YAML front matter lets you override models per-project. When you dictate into a Terminal tab whose shell is in that directory (or a child), wordbird picks up the nearest `WORDBIRD.md` and uses it.
 
 ## Hotkeys
 

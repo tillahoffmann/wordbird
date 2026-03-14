@@ -101,7 +101,7 @@ def _is_child_of(child_pid: int, parent_pid: int) -> bool:
 
 
 def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
-    """Read workspace and BIRDWORD.md from active-context.json.
+    """Read workspace and WORDBIRD.md from active-context.json.
 
     Written by the VS Code extension. Verified by checking that the PID
     in the file is a child process of the frontmost application.
@@ -122,10 +122,10 @@ def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
 
 
 def find_context_file(start_dir: str) -> str | None:
-    """Walk up from start_dir looking for a BIRDWORD.md file."""
+    """Walk up from start_dir looking for a WORDBIRD.md file."""
     current = os.path.abspath(start_dir)
     while True:
-        candidate = os.path.join(current, "BIRDWORD.md")
+        candidate = os.path.join(current, "WORDBIRD.md")
         if os.path.isfile(candidate):
             return candidate
         parent = os.path.dirname(current)
@@ -136,10 +136,10 @@ def find_context_file(start_dir: str) -> str | None:
 
 
 def get_context() -> tuple[str, str | None, str | None]:
-    """Get current context: (app_name, cwd, BIRDWORD.md contents or None).
+    """Get current context: (app_name, cwd, WORDBIRD.md contents or None).
 
     Resolves context from:
-    - Terminal.app: detects focused tab's shell cwd, walks up for BIRDWORD.md
+    - Terminal.app: detects focused tab's shell cwd, walks up for WORDBIRD.md
     - VS Code / Insiders: reads active-context.json written by the extension
     """
     bundle_id, app_name = get_frontmost_app()

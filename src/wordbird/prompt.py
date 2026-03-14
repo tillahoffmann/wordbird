@@ -1,4 +1,4 @@
-"""Default BIRDWORD.md prompt template and front matter parsing."""
+"""Default WORDBIRD.md prompt template and front matter parsing."""
 
 import frontmatter
 
@@ -35,7 +35,7 @@ Output:
 
 
 def parse_wordbird_md(content: str) -> tuple[dict, str]:
-    """Parse YAML front matter and body from a BIRDWORD.md file.
+    """Parse YAML front matter and body from a WORDBIRD.md file.
 
     Returns (metadata_dict, body_str).
     """
