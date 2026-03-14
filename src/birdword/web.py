@@ -4,11 +4,11 @@ import os
 import threading
 import webbrowser
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 
 import birdword.config as bw_config
 from birdword.config import DEFAULTS
-from birdword.history import recent
+from birdword.history import recent, stats
 
 PORT = 7870
 HOST = "127.0.0.1"
@@ -25,6 +25,7 @@ KEY_LABELS = {
 }
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
+PACKAGE_DIR = os.path.dirname(__file__)
 
 
 def _save_config(form_data):
@@ -58,6 +59,9 @@ def create_app(daemon=None) -> Flask:
 
     @app.route("/")
     def index():
+        s = stats()
+        total_mins = int(s["total_seconds"] // 60)
+        total_secs = int(s["total_seconds"] % 60)
         return render_template(
             "index.html",
             transcriptions=recent(limit=50),
@@ -65,7 +69,13 @@ def create_app(daemon=None) -> Flask:
             hold_keys=HOLD_KEY_OPTIONS,
             toggle_keys=TOGGLE_KEY_OPTIONS,
             key_labels=KEY_LABELS,
+            stats=s,
+            total_time=f"{total_mins}m {total_secs}s" if total_mins else f"{total_secs}s",
         )
+
+    @app.route("/icon.svg")
+    def icon():
+        return send_from_directory(PACKAGE_DIR, "icon.svg", mimetype="image/svg+xml")
 
     @app.route("/api/config", methods=["POST"])
     def save_config():

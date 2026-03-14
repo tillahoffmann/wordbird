@@ -35,14 +35,34 @@
   .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--pico-primary); color: var(--pico-primary-inverse); padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
   .toast.show { opacity: 1; }
   .duration { font-variant-numeric: tabular-nums; }
+  .logo { width: 28px; height: 28px; vertical-align: middle; margin-right: 8px; }
+  .stats-bar { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .stat { text-align: center; }
+  .stat .value { font-size: 1.4rem; font-weight: 700; color: var(--pico-primary); }
+  .stat .label { font-size: 0.75rem; color: var(--pico-muted-color); text-transform: uppercase; }
 </style>
 </head>
 <body>
 <main class="container">
   <header>
-    <h1>🐦 Birdword</h1>
+    <h1><img src="/icon.svg" class="logo" alt="Birdword">Birdword</h1>
     <button class="gear-btn" onclick="document.getElementById('settings-modal').showModal()" title="Settings">⚙️</button>
   </header>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="value">{{ stats.total_words | default(0) }}</div>
+      <div class="label">Words</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ total_time }}</div>
+      <div class="label">Recording time</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ stats.total_transcriptions | default(0) }}</div>
+      <div class="label">Transcriptions</div>
+    </div>
+  </div>
 
   <div class="transcript-list">
     {% if transcriptions %}

@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS transcriptions (
     cwd TEXT,
     duration_seconds REAL,
     transcription_model TEXT,
-    fix_model TEXT
+    fix_model TEXT,
+    word_count INTEGER
 )
 """
 
@@ -24,6 +25,20 @@ def _connect() -> sqlite3.Connection:
     ensure_config_dir()
     conn = sqlite3.connect(DB_PATH)
     conn.execute(_CREATE_TABLE)
+    # Add word_count column if missing (migration for existing databases)
+    try:
+        conn.execute("SELECT word_count FROM transcriptions LIMIT 0")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE transcriptions ADD COLUMN word_count INTEGER")
+        # Backfill from existing text (prefer fixed_text, fall back to raw_text)
+        rows = conn.execute(
+            "SELECT id, raw_text, fixed_text FROM transcriptions WHERE word_count IS NULL"
+        ).fetchall()
+        for row_id, raw, fixed in rows:
+            text = fixed or raw
+            wc = len(text.split()) if text else 0
+            conn.execute("UPDATE transcriptions SET word_count = ? WHERE id = ?", (wc, row_id))
+        conn.commit()
     return conn
 
 
@@ -35,6 +50,7 @@ def record(
     duration_seconds: float | None = None,
     transcription_model: str | None = None,
     fix_model: str | None = None,
+    word_count: int | None = None,
 ):
     """Record a transcription in the database."""
     conn = _connect()
@@ -43,8 +59,8 @@ def record(
             """\
             INSERT INTO transcriptions
                 (timestamp, raw_text, fixed_text, app_name, cwd,
-                 duration_seconds, transcription_model, fix_model)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 duration_seconds, transcription_model, fix_model, word_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 datetime.now(timezone.utc).isoformat(),
@@ -55,6 +71,7 @@ def record(
                 duration_seconds,
                 transcription_model,
                 fix_model,
+                word_count,
             ),
         )
         conn.commit()
@@ -89,5 +106,25 @@ def recent(limit: int = 20) -> list[dict]:
             d["timestamp"] = _utc_to_local(d["timestamp"])
             results.append(d)
         return results
+    finally:
+        conn.close()
+
+
+def stats() -> dict:
+    """Return aggregate statistics."""
+    conn = _connect()
+    try:
+        row = conn.execute("""\
+            SELECT
+                COALESCE(SUM(word_count), 0) as total_words,
+                COALESCE(SUM(duration_seconds), 0) as total_seconds,
+                COUNT(*) as total_transcriptions
+            FROM transcriptions
+        """).fetchone()
+        return {
+            "total_words": row[0],
+            "total_seconds": row[1],
+            "total_transcriptions": row[2],
+        }
     finally:
         conn.close()

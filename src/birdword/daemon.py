@@ -221,6 +221,7 @@ class Daemon:
                     duration_seconds=duration_seconds,
                     transcription_model=self.transcriber._loaded_model_id,
                     fix_model=self.postprocessor._loaded_model_id if self.postprocessor else None,
+                    word_count=word_count,
                 )
             else:
                 print("   🔇 No speech detected.")
