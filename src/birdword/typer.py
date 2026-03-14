@@ -1,11 +1,10 @@
 """Type text into the currently focused application via clipboard paste."""
 
-import subprocess
 import time
 
+import AppKit
 import Quartz
 
-# Keycode for 'V'
 _KEYCODE_V = 9
 
 
@@ -22,33 +21,52 @@ def _press_cmd_v():
     Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, up)
 
 
+def _save_clipboard() -> list[tuple] | None:
+    """Save all clipboard items (all types) via NSPasteboard."""
+    try:
+        pb = AppKit.NSPasteboard.generalPasteboard()
+        items = []
+        for ptype in pb.types():
+            data = pb.dataForType_(ptype)
+            if data is not None:
+                items.append((ptype, data))
+        return items if items else None
+    except Exception:
+        return None
+
+
+def _restore_clipboard(items: list[tuple] | None):
+    """Restore previously saved clipboard items."""
+    if items is None:
+        return
+    try:
+        pb = AppKit.NSPasteboard.generalPasteboard()
+        pb.clearContents()
+        pb.declareTypes_owner_([t for t, _ in items], None)
+        for ptype, data in items:
+            pb.setData_forType_(data, ptype)
+    except Exception:
+        pass
+
+
 def type_text(text: str):
-    """Paste text into the active application using the clipboard."""
+    """Paste text into the active application using the clipboard.
+
+    Saves and restores the full clipboard (including images, rich text, etc).
+    """
     if not text:
         return
 
-    # Save current clipboard
-    try:
-        old_clipboard = subprocess.run(
-            ["pbpaste"], capture_output=True, text=True, timeout=2
-        ).stdout
-    except Exception:
-        old_clipboard = None
+    saved = _save_clipboard()
 
-    # Copy transcription to clipboard
-    subprocess.run(
-        ["pbcopy"], input=text.encode("utf-8"), check=True, timeout=2,
-    )
+    # Set clipboard to our text
+    pb = AppKit.NSPasteboard.generalPasteboard()
+    pb.clearContents()
+    pb.setString_forType_(text, AppKit.NSPasteboardTypeString)
 
     time.sleep(0.05)
     _press_cmd_v()
 
-    # Restore previous clipboard
-    time.sleep(0.1)
-    if old_clipboard is not None:
-        try:
-            subprocess.run(
-                ["pbcopy"], input=old_clipboard.encode("utf-8"), timeout=2,
-            )
-        except Exception:
-            pass
+    # Wait for paste to complete, then restore
+    time.sleep(0.15)
+    _restore_clipboard(saved)
