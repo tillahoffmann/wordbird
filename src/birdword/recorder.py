@@ -37,7 +37,6 @@ class Recorder:
         max_chunks = math.ceil(PREROLL_SECONDS * sample_rate / BLOCK_SIZE)
         self._preroll: collections.deque[np.ndarray] = collections.deque(maxlen=max_chunks)
         self._listening = False
-        self._device_id: int | None = None
         self._level: float = 0.0  # current audio RMS level (0.0 - 1.0)
         self._mic_ready = False  # True once first non-zero audio arrives
         self._speech_start_sample: int = 0  # sample index when mic became ready
@@ -56,42 +55,39 @@ class Recorder:
         """True once the mic has produced non-zero audio."""
         return self._mic_ready
 
-    def _current_default_device(self) -> int:
-        """Get the current default input device index."""
-        return sd.default.device[0] or sd.query_devices(kind="input")["index"]
-
     def open_mic(self):
-        """Open the mic stream for pre-roll buffering. Does not start recording.
+        """Open the mic stream for pre-roll buffering.
 
-        If the default input device has changed since the last open,
-        closes and reopens on the new device.
+        Always closes and reopens to pick up device changes (e.g.,
+        Bluetooth headphones connecting/disconnecting).
         """
         with self._lock:
-            current_device = self._current_default_device()
-
-            # Reopen if device changed
-            if self._listening and self._device_id != current_device:
-                self._stream.stop()
-                self._stream.close()
+            # Close existing stream so we always use the current default device
+            if self._listening:
+                try:
+                    self._stream.stop()
+                    self._stream.close()
+                except Exception:
+                    pass
                 self._stream = None
                 self._listening = False
                 self._preroll.clear()
 
-            if self._listening:
-                return
-
-            self._stream = sd.InputStream(
-                samplerate=self.sample_rate,
-                channels=CHANNELS,
-                dtype=DTYPE,
-                blocksize=BLOCK_SIZE,
-                callback=self._callback,
-                device=current_device,
-            )
-            self._stream.start()
-            self._device_id = current_device
-            self._listening = True
-            self._mic_ready = False
+            try:
+                self._stream = sd.InputStream(
+                    samplerate=self.sample_rate,
+                    channels=CHANNELS,
+                    dtype=DTYPE,
+                    blocksize=BLOCK_SIZE,
+                    callback=self._callback,
+                )
+                self._stream.start()
+                self._listening = True
+                self._mic_ready = False
+            except Exception as e:
+                print(f"   ⚠️  Mic open failed: {e}")
+                self._stream = None
+                self._listening = False
 
     def start(self):
         """Start recording. Includes pre-roll audio from before this call."""
