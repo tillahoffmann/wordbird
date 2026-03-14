@@ -128,12 +128,24 @@ class Daemon:
         """Transcribe audio and type the result."""
         self._transcribing = True
         try:
+            # Resolve per-project models from BIRDWORD.md front matter
+            from birdword.context import get_context
+            from birdword.prompt import parse_birdword_md
+
+            _, template_content = get_context()
+            front_matter = {}
+            if template_content:
+                front_matter, _ = parse_birdword_md(template_content)
+
             print("   ✨ Transcribing...")
-            text = self.transcriber.transcribe(wav_bytes)
+            text = self.transcriber.transcribe(
+                wav_bytes,
+                model_id=front_matter.get("transcription_model"),
+            )
             if text:
                 print(f"   📝 Raw: {text[:80]}{'...' if len(text) > 80 else ''}")
                 if self.postprocessor:
-                    text = self.postprocessor.fix(text)
+                    text, _ = self.postprocessor.fix(text)
                     print(f"   ✅ Fixed: {text[:80]}{'...' if len(text) > 80 else ''}")
                 type_text(text)
             else:

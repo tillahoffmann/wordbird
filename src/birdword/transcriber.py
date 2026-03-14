@@ -1,32 +1,39 @@
 """Speech-to-text transcription using Parakeet via mlx-audio."""
 
-import tempfile
 import os
+import tempfile
 
-MODEL_ID = "mlx-community/parakeet-tdt-0.6b-v2"
+from birdword.prompt import DEFAULT_TRANSCRIPTION_MODEL
 
 
 class Transcriber:
-    """Transcribes audio using the Parakeet TDT model on Apple Silicon."""
+    """Transcribes audio using MLX-based models on Apple Silicon."""
 
-    def __init__(self, model_id: str = MODEL_ID):
-        self.model_id = model_id
+    def __init__(self, model_id: str | None = None):
+        self._cli_model_id = model_id
+        self._default_model_id = model_id or DEFAULT_TRANSCRIPTION_MODEL
         self._model = None
+        self._loaded_model_id: str | None = None
 
-    def load(self):
-        """Pre-load the model into memory."""
+    def load(self, model_id: str | None = None):
+        """Load (or reload) the transcription model."""
         from mlx_audio.stt.utils import load_model
 
-        print(f"   🧠 Loading transcription model ({self.model_id})...")
-        self._model = load_model(self.model_id)
+        model_id = model_id or self._default_model_id
+        if self._loaded_model_id == model_id:
+            return
+
+        print(f"   🧠 Loading transcription model ({model_id})...")
+        self._model = load_model(model_id)
+        self._loaded_model_id = model_id
         print("   🧠 Transcription model ready.")
 
-    def transcribe(self, wav_bytes: bytes) -> str:
+    def transcribe(self, wav_bytes: bytes, model_id: str | None = None) -> str:
         """Transcribe WAV audio bytes to text."""
-        if self._model is None:
-            self.load()
+        # CLI flag overrides front matter
+        effective_id = self._cli_model_id or model_id or self._default_model_id
+        self.load(effective_id)
 
-        # Write to a temp file since mlx-audio expects a file path
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             f.write(wav_bytes)
             tmp_path = f.name

@@ -12,6 +12,7 @@ dependencies = [
     "pyobjc-core",
     "pyobjc-framework-Cocoa",
     "pyobjc-framework-Quartz",
+    "python-frontmatter",
 ]
 
 [tool.uv]

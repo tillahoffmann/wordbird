@@ -152,6 +152,22 @@ def _cmd_status(args):
         print("🐦 Birdword is not running.")
 
 
+def _cmd_init(args):
+    """Create a BIRDWORD.md in the current directory."""
+    from birdword.prompt import DEFAULT_TEMPLATE
+
+    path = os.path.join(os.getcwd(), "BIRDWORD.md")
+    if os.path.exists(path):
+        print(f"   ⚠️  {path} already exists.")
+        return
+
+    with open(path, "w") as f:
+        f.write(DEFAULT_TEMPLATE)
+
+    print(f"   ✅ Created {path}")
+    print("   📝 Edit it to add project-specific terms and context.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Voice dictation using Parakeet on Apple Silicon"
@@ -184,13 +200,16 @@ def main():
 
     sub = parser.add_subparsers(dest="command")
 
+    sub.add_parser("init", help="Create a BIRDWORD.md in the current directory")
     sub.add_parser("start", help="Start birdword in the background")
     sub.add_parser("stop", help="Stop birdword")
     sub.add_parser("status", help="Check if birdword is running")
 
     args = parser.parse_args()
 
-    if args.command == "start":
+    if args.command == "init":
+        _cmd_init(args)
+    elif args.command == "start":
         _cmd_start(args)
     elif args.command == "stop":
         _cmd_stop(args)

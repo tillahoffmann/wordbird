@@ -1,50 +1,64 @@
 """Post-process transcription output using a small local LLM."""
 
+import jinja2
 from mlx_lm import load, generate
 
 from birdword.context import get_context
+from birdword.prompt import DEFAULT_FIX_MODEL, DEFAULT_TEMPLATE, parse_birdword_md
 
-MODEL_ID = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
 
-SYSTEM_PROMPT = (
-    "Fix transcription errors in the text below. Fix wrong words, punctuation, "
-    "and capitalization. Keep wording as close to the original as possible. "
-    "Output ONLY the corrected text. Do not add commentary or explanation."
-)
+def render_prompt(template_str: str, transcript: str) -> str:
+    """Render a BIRDWORD.md template body with the transcript.
+
+    If {{ transcript }} is not found in the template, append the transcript.
+    """
+    if "transcript" not in template_str:
+        return template_str.rstrip() + "\n\n" + transcript
+
+    tmpl = jinja2.Template(template_str)
+    return tmpl.render(transcript=transcript)
 
 
 class PostProcessor:
     """Cleans up transcription output using a small LLM."""
 
-    def __init__(self, model_id: str = MODEL_ID):
-        self.model_id = model_id
+    def __init__(self, model_id: str | None = None):
+        self._cli_model_id = model_id
+        self._default_model_id = model_id or DEFAULT_FIX_MODEL
         self._model = None
         self._tokenizer = None
+        self._loaded_model_id: str | None = None
 
-    def load(self):
-        """Pre-load the model."""
-        print(f"   ✨ Loading post-processor ({self.model_id})...")
-        self._model, self._tokenizer = load(self.model_id)
+    def load(self, model_id: str | None = None):
+        """Load (or reload) the model."""
+        model_id = model_id or self._default_model_id
+        if self._loaded_model_id == model_id:
+            return
+        print(f"   ✨ Loading post-processor ({model_id})...")
+        self._model, self._tokenizer = load(model_id)
+        self._loaded_model_id = model_id
         print("   ✨ Post-processor ready.")
 
-    def fix(self, text: str) -> str:
-        """Fix transcription errors in the given text."""
+    def fix(self, text: str) -> tuple[str, dict]:
+        """Fix transcription errors. Returns (fixed_text, front_matter)."""
         if not text.strip():
-            return text
+            return text, {}
 
-        if self._model is None:
-            self.load()
+        _, template_content = get_context()
 
-        app_name, project_context = get_context()
+        if template_content:
+            front_matter, body = parse_birdword_md(template_content)
+        else:
+            front_matter, body = parse_birdword_md(DEFAULT_TEMPLATE)
 
-        # Build the user message with context and text clearly separated
-        user_msg = ""
-        if project_context:
-            user_msg += f"Context: {project_context.strip()}\n\n"
-        user_msg += f"<text>\n{text}\n</text>"
+        # CLI flag overrides front matter
+        fix_model = self._cli_model_id or front_matter.get("fix_model", DEFAULT_FIX_MODEL)
+
+        self.load(fix_model)
+
+        user_msg = render_prompt(body, text)
 
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
         ]
 
@@ -62,9 +76,7 @@ class PostProcessor:
 
         result = result.strip()
 
-        # Guard: if the result is much shorter than input or doesn't share
-        # enough words, the model hallucinated — return original
         if len(result) < len(text) * 0.5:
-            return text
+            return text, front_matter
 
-        return result
+        return result, front_matter
