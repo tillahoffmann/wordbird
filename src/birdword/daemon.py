@@ -271,8 +271,8 @@ class Daemon:
                     self._rcmd_down = True
                     self._hold_mode = False
 
-                    # Open mic immediately so pre-roll captures speech
-                    self.recorder.open_mic()
+                    # Open mic in background so we don't block the event tap
+                    threading.Thread(target=self.recorder.open_mic, daemon=True).start()
 
                     self._hold_timer = threading.Timer(
                         HOLD_THRESHOLD, self._on_hold_threshold
