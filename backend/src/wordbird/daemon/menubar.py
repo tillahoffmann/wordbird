@@ -284,6 +284,11 @@ class MenuBar(AppKit.NSObject):
         if hasattr(self, "_sigint_callback") and self._sigint_callback:
             self._sigint_callback()
 
+    def checkTapEnabled_(self, timer):
+        """Called by NSTimer to periodically check the event tap."""
+        if hasattr(self, "_tap_check_callback") and self._tap_check_callback:
+            self._tap_check_callback()
+
     def copyLast_(self, sender):
         """Copy the last transcription to the clipboard."""
         from wordbird.server.history import recent

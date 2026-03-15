@@ -144,12 +144,18 @@ def create_app() -> FastAPI:
     def get_stats():
         return stats()
 
+    @app.get("/api/health")
+    def health():
+        return {"ok": True}
+
     @app.post("/api/transcribe")
     async def transcribe(
         audio: UploadFile = File(...),
         context_content: str = Form(""),
     ):
         """Transcribe audio to text (speech-to-text only)."""
+        import asyncio
+
         wav_bytes = await audio.read()
 
         from wordbird.prompt import parse_wordbird_md
@@ -161,7 +167,9 @@ def create_app() -> FastAPI:
         transcription_model = front_matter.get("transcription_model")
 
         t = _get_transcriber()
-        raw_text = t.transcribe(wav_bytes, model_id=transcription_model)
+        raw_text = await asyncio.to_thread(
+            t.transcribe, wav_bytes, model_id=transcription_model
+        )
 
         return {
             "raw_text": raw_text or "",
@@ -169,10 +177,14 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/api/postprocess")
-    def postprocess(req: PostProcessRequest):
+    async def postprocess(req: PostProcessRequest):
         """Post-process transcribed text with LLM."""
+        import asyncio
+
         pp = _get_postprocessor()
-        fixed_text, _ = pp.fix(req.text, context_content=req.context_content or None)
+        fixed_text, _ = await asyncio.to_thread(
+            pp.fix, req.text, context_content=req.context_content or None
+        )
         return {
             "fixed_text": fixed_text,
             "model": pp._loaded_model_id,
@@ -198,6 +210,8 @@ def create_app() -> FastAPI:
         Used by external clients (Claude plugin, etc.) that don't need
         intermediate UI updates.
         """
+        import asyncio
+
         wav_bytes = await audio.read()
 
         from wordbird.prompt import parse_wordbird_md
@@ -209,7 +223,9 @@ def create_app() -> FastAPI:
         transcription_model = front_matter.get("transcription_model")
 
         t = _get_transcriber()
-        raw_text = t.transcribe(wav_bytes, model_id=transcription_model)
+        raw_text = await asyncio.to_thread(
+            t.transcribe, wav_bytes, model_id=transcription_model
+        )
 
         if not raw_text:
             return {"raw_text": "", "fixed_text": None, "word_count": 0}
@@ -220,7 +236,9 @@ def create_app() -> FastAPI:
 
         if not skip_fix:
             pp = _get_postprocessor()
-            fixed_text, _ = pp.fix(raw_text, context_content=context_content or None)
+            fixed_text, _ = await asyncio.to_thread(
+                pp.fix, raw_text, context_content=context_content or None
+            )
 
         final_text = fixed_text or raw_text
         word_count = len(final_text.split())
@@ -257,10 +275,16 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
-def start_server():
-    """Start the server in a subprocess."""
+def start_server(wait: bool = True, timeout: float = 120) -> tuple:
+    """Start the server in a subprocess.
+
+    If wait=True, blocks until the server is healthy or timeout is reached.
+    """
     import subprocess
     import sys
+    import time
+
+    import httpx
 
     proc = subprocess.Popen(
         [
@@ -274,7 +298,26 @@ def start_server():
             str(PORT),
         ],
     )
-    return proc, f"http://{HOST}:{PORT}"
+
+    url = f"http://{HOST}:{PORT}"
+
+    if wait:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                raise RuntimeError(f"Server process exited with code {proc.returncode}")
+            try:
+                resp = httpx.get(f"{url}/api/health", timeout=2)
+                if resp.status_code == 200:
+                    break
+            except httpx.ConnectError:
+                pass
+            time.sleep(0.5)
+        else:
+            proc.terminate()
+            raise RuntimeError(f"Server failed to start within {timeout}s")
+
+    return proc, url
 
 
 def open_dashboard():

@@ -56,6 +56,9 @@ KEY_LABELS = {
     "escape": "Escape",
 }
 
+# How often to check if the event tap is still enabled (seconds)
+_TAP_CHECK_INTERVAL = 5.0
+
 
 class Daemon:
     """Background dictation daemon.
@@ -92,6 +95,8 @@ class Daemon:
         self._modifier_down = False
         self._transcribing = False
         self._cancelled = False
+        self._tap = None
+        self._server_proc = None
 
     def apply_config(self, cfg: dict):
         """Apply configuration changes live."""
@@ -267,7 +272,18 @@ class Daemon:
             self.recorder.stop()
 
     def _event_tap_callback(self, proxy, event_type, event, refcon):
-        """CGEventTap callback — detects modifier + toggle key combo."""
+        """CGEventTap callback — detects modifier + toggle key combo.
+
+        Returns None to swallow the toggle key (prevents e.g. Spotlight
+        opening on Cmd+Space). Returns the event for everything else
+        to avoid blocking other apps.
+        """
+        if event_type == Quartz.kCGEventTapDisabledByTimeout:
+            if self._tap is not None:
+                print("   ⚠️  Event tap was disabled, re-enabling...")
+                Quartz.CGEventTapEnable(self._tap, True)
+            return event
+
         if event_type == Quartz.kCGEventFlagsChanged:
             keycode = Quartz.CGEventGetIntegerValueField(
                 event, Quartz.kCGKeyboardEventKeycode
@@ -282,17 +298,22 @@ class Daemon:
                 event, Quartz.kCGKeyboardEventKeycode
             )
 
-            # Escape aborts
-            if keycode == 53 and (self.recorder.is_recording or self._transcribing):
-                self._abort()
-                return None
-
-            # Modifier + toggle key
+            # Modifier + toggle key — swallow to prevent Spotlight etc.
             if keycode == self._toggle_keycode and self._modifier_down:
                 self._toggle_recording()
                 return None
 
+            # Escape aborts (but don't swallow it)
+            if keycode == 53 and (self.recorder.is_recording or self._transcribing):
+                self._abort()
+
         return event
+
+    def _check_tap_enabled_(self, timer):
+        """NSTimer callback — periodically checks the event tap is still alive."""
+        if self._tap is not None and not Quartz.CGEventTapIsEnabled(self._tap):
+            print("   ⚠️  Event tap was disabled, re-enabling...")
+            Quartz.CGEventTapEnable(self._tap, True)
 
     def run(self):
         """Start the daemon. Blocks until interrupted."""
@@ -312,7 +333,7 @@ class Daemon:
             Quartz.kCGEventKeyDown
         ) | Quartz.CGEventMaskBit(Quartz.kCGEventFlagsChanged)
 
-        tap = Quartz.CGEventTapCreate(
+        self._tap = Quartz.CGEventTapCreate(
             Quartz.kCGSessionEventTap,
             Quartz.kCGHeadInsertEventTap,
             Quartz.kCGEventTapOptionDefault,
@@ -321,18 +342,24 @@ class Daemon:
             None,
         )
 
-        if tap is None:
+        if self._tap is None:
             print("   ❌ Failed to create event tap.")
             print("   🔐 Make sure Terminal has Accessibility permission.")
             return
 
-        run_loop_source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)
+        run_loop_source = Quartz.CFMachPortCreateRunLoopSource(None, self._tap, 0)
         Quartz.CFRunLoopAddSource(
             Quartz.CFRunLoopGetCurrent(),
             run_loop_source,
             Quartz.kCFRunLoopCommonModes,
         )
-        Quartz.CGEventTapEnable(tap, True)
+        Quartz.CGEventTapEnable(self._tap, True)
+
+        # Periodically check the event tap is still enabled
+        Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            _TAP_CHECK_INTERVAL, self.menubar, "checkTapEnabled:", None, True
+        )
+        self.menubar._tap_check_callback = lambda: self._check_tap_enabled_(None)
 
         def _handle_shutdown(signum, frame):
             signame = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
@@ -343,12 +370,14 @@ class Daemon:
         signal.signal(signal.SIGTERM, _handle_shutdown)
         signal.signal(signal.SIGINT, _handle_shutdown)
 
+        # NSApplication.run() overrides SIGINT on start. Use a repeating
+        # timer to reinstall our handler — more robust than a one-shot.
         def _reinstall_sigint():
             signal.signal(signal.SIGINT, _handle_shutdown)
 
-        Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            0.1, self.menubar, "reinstallSignalHandler:", None, False
-        )
         self.menubar._sigint_callback = _reinstall_sigint
+        Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            0.5, self.menubar, "reinstallSignalHandler:", None, True
+        )
 
         app.run()
