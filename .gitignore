@@ -22,6 +22,9 @@ frontend/dist/
 # Bundled frontend in backend
 backend/src/wordbird/static/
 
+# Copied README for hatchling builds
+backend/README.md
+
 # Caches
 .pytest_cache/
 .ruff_cache/

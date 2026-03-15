@@ -15,6 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      - run: cp ../README.md .
       - run: uv sync
       - run: uv run pytest tests/ -v
 
