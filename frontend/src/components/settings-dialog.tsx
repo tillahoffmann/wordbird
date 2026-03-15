@@ -141,6 +141,17 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             />
             <Label htmlFor="no_fix">Disable post-processing</Label>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="sound"
+              checked={config.sound}
+              onCheckedChange={(checked) =>
+                setConfig({ ...config, sound: checked === true })
+              }
+            />
+            <Label htmlFor="sound">Play sound when mic is ready</Label>
+          </div>
         </div>
         <DialogFooter>
           <Button onClick={handleSave} disabled={saving} className="w-full">

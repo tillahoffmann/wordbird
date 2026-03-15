@@ -85,6 +85,7 @@ DEFAULTS = {
     "transcription_model": DEFAULT_TRANSCRIPTION_MODEL,
     "fix_model": DEFAULT_FIX_MODEL,
     "no_fix": False,
+    "sound": True,
 }
 
 DEFAULT_CONFIG_TOML = """\

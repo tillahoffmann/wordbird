@@ -46,6 +46,9 @@ MODIFIER_FLAGS = {
     "fn": Quartz.kCGEventFlagMaskSecondaryFn,
 }
 
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+_BONG_PATH = os.path.join(_STATIC_DIR, "bong.ogg")
+
 # How often to check if the event tap is still enabled (seconds)
 _TAP_CHECK_INTERVAL = 5.0
 
@@ -66,6 +69,7 @@ class Daemon:
         self.recorder = Recorder()
         self._server_url = server_url
         self._no_fix = no_fix
+        self._sound = True
 
         self._modifier_keycode = KEYCODES[modifier_key]
         self._modifier_flag = MODIFIER_FLAGS[modifier_key]
@@ -121,6 +125,7 @@ class Daemon:
         self._modifier_label = KEY_LABELS.get(modifier_key, modifier_key)
         self._toggle_label = KEY_LABELS.get(toggle_key, toggle_key)
         self._no_fix = cfg.get("no_fix", False)
+        self._sound = cfg.get("sound", True)
         print(f"   🔄 Config reloaded: {self._modifier_label} + {self._toggle_label}")
 
     def _toggle_recording(self):
@@ -151,6 +156,7 @@ class Daemon:
         self.recorder.start()
 
         def _wait_for_mic():
+            import subprocess
             import time
 
             while self.recorder.is_recording and not self.recorder.mic_ready:
@@ -158,6 +164,12 @@ class Daemon:
             if self.recorder.is_recording:
                 self.menubar.set_state(State.LISTENING)
                 print("   🎤 Listening...")
+                if self._sound:
+                    subprocess.Popen(
+                        ["afplay", _BONG_PATH],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
 
         threading.Thread(target=_wait_for_mic, daemon=True).start()
 

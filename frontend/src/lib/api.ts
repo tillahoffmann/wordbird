@@ -20,6 +20,7 @@ export interface ConfigData {
   transcription_model: string
   fix_model: string
   no_fix: boolean
+  sound: boolean
 }
 
 export interface ConfigResponse {
