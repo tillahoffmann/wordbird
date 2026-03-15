@@ -56,6 +56,15 @@ class Recorder:
             self._chunks = []
             self._level = 0.0
             self._mic_ready = False
+
+            # Reinitialize PortAudio to pick up device changes
+            # (e.g., AirPods connecting, USB mic plugging in)
+            try:
+                sd._terminate()
+                sd._initialize()
+            except Exception:
+                pass
+
             try:
                 self._stream = sd.InputStream(
                     samplerate=self.sample_rate,
@@ -66,23 +75,9 @@ class Recorder:
                 )
                 self._stream.start()
                 self._recording = True
-            except Exception:
-                # PortAudio device list may be stale — reinitialize and retry
-                try:
-                    sd._terminate()
-                    sd._initialize()
-                    self._stream = sd.InputStream(
-                        samplerate=self.sample_rate,
-                        channels=CHANNELS,
-                        dtype=DTYPE,
-                        blocksize=BLOCK_SIZE,
-                        callback=self._callback,
-                    )
-                    self._stream.start()
-                    self._recording = True
-                except Exception as e:
-                    print(f"   ⚠️  Mic open failed: {e}")
-                    self._stream = None
+            except Exception as e:
+                print(f"   ⚠️  Mic open failed: {e}")
+                self._stream = None
 
     def stop(self) -> tuple[bytes, float]:
         """Stop recording and return (WAV bytes, duration in seconds)."""
