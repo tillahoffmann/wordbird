@@ -1,10 +1,11 @@
 import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
-import type { Transcription } from "@/lib/api"
+import { deleteTranscription, type Transcription } from "@/lib/api"
 import { toast } from "sonner"
 
 interface TranscriptListProps {
   transcriptions: Transcription[]
+  onDelete?: () => void
 }
 
 function shortenPath(cwd: string): string {
@@ -15,7 +16,7 @@ function shortenPath(cwd: string): string {
   return cwd
 }
 
-function TranscriptItem({ t }: { t: Transcription }) {
+function TranscriptItem({ t, onDelete }: { t: Transcription; onDelete?: () => void }) {
   const [showOriginal, setShowOriginal] = useState(false)
   const displayText = t.fixed_text || t.raw_text
   const wasChanged = t.fixed_text != null && t.fixed_text !== t.raw_text
@@ -26,6 +27,17 @@ function TranscriptItem({ t }: { t: Transcription }) {
       () => toast("Copied to clipboard"),
       () => toast.error("Failed to copy")
     )
+  }
+
+  function handleDelete() {
+    deleteTranscription(t.id).then((ok) => {
+      if (ok) {
+        toast("Deleted")
+        onDelete?.()
+      } else {
+        toast.error("Failed to delete")
+      }
+    })
   }
 
   return (
@@ -43,16 +55,27 @@ function TranscriptItem({ t }: { t: Transcription }) {
             </span>
           )}
         </div>
-        <button
-          onClick={copyText}
-          className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"
-          title="Copy to clipboard"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeWidth="2" />
-            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2" />
-          </svg>
-        </button>
+        <div className="flex gap-1">
+          <button
+            onClick={copyText}
+            className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"
+            title="Copy to clipboard"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeWidth="2" />
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2" />
+            </svg>
+          </button>
+          <button
+            onClick={handleDelete}
+            className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
+            title="Delete"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
+              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+            </svg>
+          </button>
+        </div>
       </div>
       <div className="break-words">{displayText}</div>
       <div className="mt-1">
@@ -78,7 +101,7 @@ function TranscriptItem({ t }: { t: Transcription }) {
   )
 }
 
-export function TranscriptList({ transcriptions }: TranscriptListProps) {
+export function TranscriptList({ transcriptions, onDelete }: TranscriptListProps) {
   if (transcriptions.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -92,7 +115,7 @@ export function TranscriptList({ transcriptions }: TranscriptListProps) {
   return (
     <div className="flex flex-col gap-2">
       {transcriptions.map((t) => (
-        <TranscriptItem key={t.id} t={t} />
+        <TranscriptItem key={t.id} t={t} onDelete={onDelete} />
       ))}
     </div>
   )

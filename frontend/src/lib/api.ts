@@ -58,3 +58,9 @@ export async function saveConfig(update: Partial<ConfigData>): Promise<boolean> 
   const data = await res.json()
   return data.ok === true
 }
+
+export async function deleteTranscription(id: number): Promise<boolean> {
+  const res = await fetch(`/api/transcriptions/${id}`, { method: "DELETE" })
+  const data = await res.json()
+  return data.ok === true
+}

@@ -17,7 +17,6 @@ function App() {
     fetchTranscriptions().then(setTranscriptions)
   }
 
-  // Sync hash with dialog state
   function setSettingsOpenWithHash(open: boolean) {
     setSettingsOpen(open)
     window.location.hash = open ? "#settings" : ""
@@ -30,7 +29,6 @@ function App() {
     const onHashChange = () => {
       setSettingsOpen(window.location.hash === "#settings")
     }
-    // Sync dark mode with system preference
     const darkQuery = window.matchMedia("(prefers-color-scheme: dark)")
     const onDarkChange = (e: MediaQueryListEvent) => {
       document.documentElement.classList.toggle("dark", e.matches)
@@ -47,8 +45,8 @@ function App() {
   }, [])
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4 min-h-screen">
-      <header className="flex justify-between items-center mb-4">
+    <div className="flex flex-col h-screen max-w-3xl mx-auto px-4">
+      <header className="flex justify-between items-center py-4 shrink-0">
         <h1 className="text-xl font-semibold flex items-center gap-2">
           <img src="/icon.svg" alt="" className="w-7 h-7 dark:invert" />
           Wordbird
@@ -70,7 +68,11 @@ function App() {
       </header>
 
       <StatsBar stats={stats} />
-      <TranscriptList transcriptions={transcriptions} />
+
+      <div className="flex-1 overflow-y-auto min-h-0 pb-4">
+        <TranscriptList transcriptions={transcriptions} onDelete={refresh} />
+      </div>
+
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpenWithHash} />
       <Toaster />
     </div>

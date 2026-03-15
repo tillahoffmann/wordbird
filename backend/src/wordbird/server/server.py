@@ -19,6 +19,7 @@ from wordbird.config import (
     TOGGLE_KEY_OPTIONS,
     TRANSCRIPTION_MODEL_SUGGESTIONS,
 )
+from wordbird.server.history import delete as delete_transcription
 from wordbird.server.history import recent, stats
 from wordbird.server.history import record as record_transcription
 
@@ -211,6 +212,13 @@ def create_app() -> FastAPI:
         """Record a transcription in history."""
         record_transcription(**entry.model_dump())
         return {"ok": True}
+
+    @app.delete("/api/transcriptions/{transcription_id}")
+    def remove_transcription(transcription_id: int):
+        """Delete a transcription by ID."""
+        if delete_transcription(transcription_id):
+            return {"ok": True}
+        return {"ok": False, "error": "not found"}
 
     @app.post("/api/transcribe/complete")
     async def transcribe_complete(
