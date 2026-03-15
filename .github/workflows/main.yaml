@@ -27,14 +27,18 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: cp ../README.md .
-      - run: uv build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Build frontend and bundle into backend
+      - run: cd frontend && npm ci && npm run build
+      - run: cp -r frontend/dist backend/src/wordbird/static
+      # Build Python package
+      - run: cp README.md backend/
+      - run: cd backend && uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: backend/dist

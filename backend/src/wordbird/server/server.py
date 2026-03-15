@@ -20,7 +20,7 @@ from wordbird.config import (
 from wordbird.server.history import recent, stats
 from wordbird.server.history import record as record_transcription
 
-PACKAGE_DIR = os.path.dirname(__file__)
+PACKAGE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 
 def _get_effective_config() -> dict:

@@ -1,4 +1,4 @@
-.PHONY: backend-test backend-build backend-dev daemon-dev vscode-package frontend-dev frontend-build frontend-bundle dev
+.PHONY: backend-test backend-build backend-dev daemon-dev vscode-package frontend-dev frontend-build frontend-bundle wordbird
 
 backend-test:
 	cd backend && uv run pytest tests/ -v
@@ -28,8 +28,5 @@ frontend-bundle:
 	rm -rf backend/src/wordbird/static
 	cp -r frontend/dist backend/src/wordbird/static
 
-# Run both backend and frontend dev servers
-dev:
-	@echo "Starting backend on http://127.0.0.1:7870"
-	@echo "Starting frontend on http://localhost:5173 (proxies /api to backend)"
-	@$(MAKE) backend-dev & $(MAKE) frontend-dev & wait
+wordbird: frontend-bundle
+	cd backend && uv run wordbird

@@ -18,7 +18,8 @@ function shortenPath(cwd: string): string {
 function TranscriptItem({ t }: { t: Transcription }) {
   const [showOriginal, setShowOriginal] = useState(false)
   const displayText = t.fixed_text || t.raw_text
-  const hasOriginal = t.fixed_text && t.fixed_text !== t.raw_text
+  const wasChanged = t.fixed_text != null && t.fixed_text !== t.raw_text
+  const wasPostProcessed = t.fixed_text != null
 
   function copyText() {
     navigator.clipboard.writeText(displayText).then(
@@ -54,19 +55,25 @@ function TranscriptItem({ t }: { t: Transcription }) {
         </button>
       </div>
       <div className="break-words">{displayText}</div>
-      {hasOriginal && (
-        <div className="mt-1">
-          <button
-            onClick={() => setShowOriginal(!showOriginal)}
-            className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-          >
-            {showOriginal ? "Hide" : "Show"} original
-          </button>
-          {showOriginal && (
-            <div className="text-sm text-muted-foreground mt-1">{t.raw_text}</div>
-          )}
-        </div>
-      )}
+      <div className="mt-1">
+        {wasChanged ? (
+          <>
+            <button
+              onClick={() => setShowOriginal(!showOriginal)}
+              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              {showOriginal ? "Hide" : "Show"} original
+            </button>
+            {showOriginal && (
+              <div className="text-sm text-muted-foreground mt-1">{t.raw_text}</div>
+            )}
+          </>
+        ) : wasPostProcessed ? (
+          <span className="text-xs text-muted-foreground/50 italic">No corrections needed</span>
+        ) : (
+          <span className="text-xs text-muted-foreground/50 italic">Not post-processed</span>
+        )}
+      </div>
     </div>
   )
 }
