@@ -19,6 +19,7 @@ dependencies = [
     "uvicorn[standard]",
     "httpx",
     "markdown-it-py",
+    "tomli-w",
     "tomli; python_version < '3.11'",
 ]
 

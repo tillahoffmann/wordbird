@@ -116,21 +116,14 @@ def create_app() -> FastAPI:
 
     @app.put("/api/config")
     def save_config(update: ConfigUpdate):
+        import tomli_w
+
         bw_config.ensure_data_dir()
-        lines = []
+        # Only write values that differ from defaults
         data = update.model_dump(exclude_none=True)
-        for key in ["modifier_key", "toggle_key", "transcription_model", "fix_model"]:
-            val = data.get(key, DEFAULTS[key])
-            if val != DEFAULTS[key]:
-                lines.append(f'{key} = "{val}"')
-        if data.get("no_fix"):
-            lines.append("no_fix = true")
-        if not data.get("sound", True):
-            lines.append("sound = false")
-        if data.get("submit_with_return"):
-            lines.append("submit_with_return = true")
-        with open(bw_config.CONFIG_PATH, "w") as f:
-            f.write("\n".join(lines) + "\n" if lines else "")
+        overrides = {k: v for k, v in data.items() if v != DEFAULTS.get(k)}
+        with open(bw_config.CONFIG_PATH, "wb") as f:
+            tomli_w.dump(overrides, f)
         return {"ok": True}
 
     @app.get("/api/transcriptions")
