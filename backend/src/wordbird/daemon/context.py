@@ -13,7 +13,6 @@ from wordbird.config import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-VSCODE_CONTEXT_PATH = DATA_DIR / "vscode-context.json"
 EDITOR_CONTEXTS_DIR = DATA_DIR / "editor-contexts"
 
 
@@ -134,7 +133,7 @@ def _cleanup_stale_contexts():
     if not EDITOR_CONTEXTS_DIR.is_dir():
         return
     for path in EDITOR_CONTEXTS_DIR.iterdir():
-        if not path.suffix == ".json":
+        if path.suffix != ".json":
             continue
         try:
             data = json.loads(path.read_text())
@@ -143,19 +142,27 @@ def _cleanup_stale_contexts():
                 path.unlink()
                 logger.debug("Cleaned up stale context: %s (pid %d)", path.name, pid)
         except Exception:
-            # Malformed file — remove it
             try:
                 path.unlink()
             except Exception:
                 pass
 
 
+def _read_wordbird_md_from_disk(workspace: str) -> str | None:
+    """Read WORDBIRD.md from a workspace directory on disk."""
+    try:
+        return (Path(workspace) / "WORDBIRD.md").read_text()
+    except Exception:
+        return None
+
+
 def _read_editor_contexts(frontmost_pid: int) -> tuple[str | None, str | None]:
     """Scan editor-contexts/ for the context matching the frontmost app.
 
     Cleans up stale context files first, then matches by PID ancestry.
-    If multiple candidates match, uses the focused window title to disambiguate,
-    falling back to the most recently modified file.
+    If multiple candidates match, checks if all WORDBIRD.md contents are
+    identical (in which case it doesn't matter which we pick). If they
+    differ, reads from disk to find the one matching the focused window.
     """
     _cleanup_stale_contexts()
 
@@ -165,7 +172,7 @@ def _read_editor_contexts(frontmost_pid: int) -> tuple[str | None, str | None]:
     # Collect candidates that belong to the frontmost app
     candidates: list[tuple[float, str | None, str | None]] = []
     for path in EDITOR_CONTEXTS_DIR.iterdir():
-        if not path.suffix == ".json":
+        if path.suffix != ".json":
             continue
         try:
             data = json.loads(path.read_text())
@@ -191,34 +198,27 @@ def _read_editor_contexts(frontmost_pid: int) -> tuple[str | None, str | None]:
         _, workspace, wordbird_md = candidates[0]
         return workspace, wordbird_md
 
-    # Multiple candidates — match by focused window title
+    # Multiple candidates. If all WORDBIRD.md contents are the same,
+    # it doesn't matter which we pick.
+    contents = {c[2] for c in candidates}
+    if len(contents) == 1:
+        # All identical — pick the most recent
+        candidates.sort(reverse=True)
+        _, workspace, wordbird_md = candidates[0]
+        return workspace, wordbird_md
+
+    # Contents differ — use the focused window title to find the right workspace,
+    # then read WORDBIRD.md from disk to verify.
     title = _get_focused_window_title(frontmost_pid)
     if title:
         for _, workspace, wordbird_md in candidates:
             if workspace and Path(workspace).name in title:
                 return workspace, wordbird_md
 
-    # Fallback: most recently modified
+    # Last resort: most recently modified
     candidates.sort(reverse=True)
     _, workspace, wordbird_md = candidates[0]
     return workspace, wordbird_md
-
-
-def _read_vscode_context(frontmost_pid: int) -> tuple[str | None, str | None]:
-    """Legacy: read from vscode-context.json (fallback for old VS Code extension)."""
-    try:
-        data = json.loads(VSCODE_CONTEXT_PATH.read_text())
-
-        ctx_pid = data.get("pid")
-        if ctx_pid != frontmost_pid and not _is_child_of(ctx_pid, frontmost_pid):
-            return None, None
-
-        return data.get("workspace"), data.get("wordbird_md")
-    except FileNotFoundError:
-        return None, None
-    except Exception:
-        logger.debug("Failed to read vscode-context.json", exc_info=True)
-        return None, None
 
 
 def find_context_file(start_dir: str) -> Path | None:
@@ -252,13 +252,9 @@ def get_context() -> tuple[str, str | None, str | None]:
                 except Exception:
                     logger.debug("Failed to read %s", context_file, exc_info=True)
     else:
-        # Try editor-contexts/ first (works for any editor with an extension)
+        # Try editor-contexts/ (works for any editor with an extension)
         ws = AppKit.NSWorkspace.sharedWorkspace()
         frontmost_pid = ws.frontmostApplication().processIdentifier()
         cwd, context_content = _read_editor_contexts(frontmost_pid)
-
-        # Fallback to legacy vscode-context.json
-        if cwd is None and context_content is None:
-            cwd, context_content = _read_vscode_context(frontmost_pid)
 
     return app_name, cwd, context_content

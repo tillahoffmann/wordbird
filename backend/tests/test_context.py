@@ -4,11 +4,7 @@ import json
 import os
 import time
 
-from wordbird.daemon.context import (
-    _read_editor_contexts,
-    _read_vscode_context,
-    find_context_file,
-)
+from wordbird.daemon.context import _read_editor_contexts, find_context_file
 
 
 class TestFindContextFile:
@@ -24,42 +20,6 @@ class TestFindContextFile:
 
     def test_returns_none_when_not_found(self, tmp_path):
         assert find_context_file(str(tmp_path)) is None
-
-
-class TestVscodeContext:
-    """Legacy vscode-context.json tests."""
-
-    def test_reads_matching_pid(self, tmp_path, monkeypatch):
-        ctx = {
-            "pid": 12345,
-            "workspace": "/tmp/proj",
-            "wordbird_md": "Fix: {{ transcript }}",
-        }
-        ctx_path = tmp_path / "vscode-context.json"
-        ctx_path.write_text(json.dumps(ctx))
-        monkeypatch.setattr("wordbird.daemon.context.VSCODE_CONTEXT_PATH", ctx_path)
-
-        workspace, content = _read_vscode_context(12345)
-        assert workspace == "/tmp/proj"
-        assert content == "Fix: {{ transcript }}"
-
-    def test_ignores_mismatched_pid(self, tmp_path, monkeypatch):
-        ctx = {"pid": 12345, "workspace": "/tmp/proj", "wordbird_md": "content"}
-        ctx_path = tmp_path / "vscode-context.json"
-        ctx_path.write_text(json.dumps(ctx))
-        monkeypatch.setattr("wordbird.daemon.context.VSCODE_CONTEXT_PATH", ctx_path)
-
-        workspace, content = _read_vscode_context(99999)
-        assert workspace is None
-        assert content is None
-
-    def test_handles_missing_file(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(
-            "wordbird.daemon.context.VSCODE_CONTEXT_PATH", tmp_path / "nope.json"
-        )
-        workspace, content = _read_vscode_context(12345)
-        assert workspace is None
-        assert content is None
 
 
 class TestEditorContexts:
@@ -104,20 +64,38 @@ class TestEditorContexts:
 
     def test_cleans_up_stale_pids(self, tmp_path, monkeypatch):
         ctx_dir = tmp_path / "editor-contexts"
-        # PID 2147483647 is almost certainly not running
         stale_path = self._write_ctx(ctx_dir, 2147483647, "/tmp/stale")
         monkeypatch.setattr("wordbird.daemon.context.EDITOR_CONTEXTS_DIR", ctx_dir)
 
         _read_editor_contexts(99999)
         assert not stale_path.exists()
 
-    def test_picks_matching_window_title(self, tmp_path, monkeypatch):
+    def test_identical_contexts_picks_any(self, tmp_path, monkeypatch):
+        """When all candidates have the same WORDBIRD.md, pick most recent."""
+        ctx_dir = tmp_path / "editor-contexts"
+        pid = os.getpid()
+        path_a = self._write_ctx(ctx_dir, pid, "/tmp/proj-a", "same content")
+        # Write a second file under a different name but same PID
+        path_b = ctx_dir / "other.json"
+        path_b.write_text(
+            json.dumps(
+                {"pid": pid, "workspace": "/tmp/proj-b", "wordbird_md": "same content"}
+            )
+        )
+        os.utime(path_a, (0, 0))
+        os.utime(path_b, (time.time(), time.time()))
+
+        monkeypatch.setattr("wordbird.daemon.context.EDITOR_CONTEXTS_DIR", ctx_dir)
+        workspace, content = _read_editor_contexts(pid)
+        assert workspace == "/tmp/proj-b"  # Most recent
+        assert content == "same content"
+
+    def test_different_contexts_uses_window_title(self, tmp_path, monkeypatch):
+        """When contents differ, use window title to disambiguate."""
         ctx_dir = tmp_path / "editor-contexts"
         pid = os.getpid()
         self._write_ctx(ctx_dir, pid, "/home/user/project-alpha", "alpha ctx")
-
-        # Second context file with different workspace but same PID
-        path_b = ctx_dir / f"{pid + 100000}.json"
+        path_b = ctx_dir / "other.json"
         path_b.write_text(
             json.dumps(
                 {
@@ -139,10 +117,14 @@ class TestEditorContexts:
         assert content == "beta ctx"
 
     def test_falls_back_to_newest_mtime(self, tmp_path, monkeypatch):
+        """When title match fails, use most recently modified."""
         ctx_dir = tmp_path / "editor-contexts"
         pid = os.getpid()
         path_old = self._write_ctx(ctx_dir, pid, "/tmp/old-project", "old")
-        path_new = self._write_ctx(ctx_dir, pid, "/tmp/new-project", "new")
+        path_new = ctx_dir / "other.json"
+        path_new.write_text(
+            json.dumps({"pid": pid, "workspace": "/tmp/new-project", "wordbird_md": "new"})
+        )
 
         os.utime(path_old, (0, 0))
         os.utime(path_new, (time.time(), time.time()))
