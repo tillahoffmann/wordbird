@@ -1,12 +1,6 @@
 """FastAPI server for wordbird — API + ML inference + static frontend."""
 
 import os
-
-# Prevent loky/joblib semaphore leaks from tokenizer workers.
-# Must be set before any ML imports.
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")
-
 import webbrowser
 from contextlib import asynccontextmanager
 
@@ -94,6 +88,16 @@ def create_app() -> FastAPI:
             pp.load()
         print("🦜 Models ready.")
         yield
+        # Clean shutdown: release ML models and worker pools
+        print("🦜 Shutting down...")
+        _ml_state["transcriber"] = None
+        _ml_state["postprocessor"] = None
+        try:
+            from joblib.externals.loky import get_reusable_executor
+
+            get_reusable_executor().shutdown(wait=True, kill_workers=True)
+        except Exception:
+            pass
 
     app = FastAPI(title="Wordbird", lifespan=lifespan)
 
