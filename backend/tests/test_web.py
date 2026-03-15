@@ -25,13 +25,13 @@ class TestServer:
         assert resp.status_code == 200
         data = resp.json()
         assert "config" in data
-        assert "hold_key_options" in data
+        assert "modifier_key_options" in data
 
     def test_config_save(self, client):
         resp = client.put(
             "/api/config",
             json={
-                "hold_key": "lalt",
+                "modifier_key": "lalt",
                 "toggle_key": "return",
                 "transcription_model": "mlx-community/parakeet-tdt-0.6b-v2",
                 "fix_model": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
@@ -43,7 +43,7 @@ class TestServer:
         from wordbird.config import load_config
 
         cfg = load_config()
-        assert cfg["hold_key"] == "lalt"
+        assert cfg["modifier_key"] == "lalt"
         assert cfg["toggle_key"] == "return"
 
     def test_history(self, client):

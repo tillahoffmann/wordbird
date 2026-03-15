@@ -15,7 +15,7 @@ export interface Stats {
 }
 
 export interface ConfigData {
-  hold_key: string
+  modifier_key: string
   toggle_key: string
   transcription_model: string
   fix_model: string
@@ -24,7 +24,7 @@ export interface ConfigData {
 
 export interface ConfigResponse {
   config: ConfigData
-  hold_key_options: string[]
+  modifier_key_options: string[]
   toggle_key_options: string[]
   key_labels: Record<string, string>
 }

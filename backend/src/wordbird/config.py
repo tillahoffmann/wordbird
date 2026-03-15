@@ -27,7 +27,7 @@ PIDFILE = os.path.join(CONFIG_DIR, "wordbird.pid")
 LOG_PATH = os.path.join(CONFIG_DIR, "wordbird.log")
 
 DEFAULTS = {
-    "hold_key": "rcmd",
+    "modifier_key": "rcmd",
     "toggle_key": "space",
     "transcription_model": DEFAULT_TRANSCRIPTION_MODEL,
     "fix_model": DEFAULT_FIX_MODEL,
@@ -38,7 +38,7 @@ DEFAULT_CONFIG_TOML = """\
 # Wordbird configuration
 # See: https://github.com/tillahoffmann/wordbird
 
-# hold_key = "rcmd"       # rcmd, lcmd, ralt, lalt, rshift, lshift, rctrl, lctrl
+# modifier_key = "rcmd"   # rcmd, lcmd, ralt, lalt, rshift, lshift, rctrl, lctrl
 # toggle_key = "space"    # space, return, tab, escape
 # transcription_model = "mlx-community/parakeet-tdt-0.6b-v2"
 # fix_model = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"

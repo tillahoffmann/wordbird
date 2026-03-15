@@ -64,8 +64,8 @@ def _cli_overrides(args) -> dict:
         result["fix_model"] = args.fix_model
     if args.no_fix:
         result["no_fix"] = True
-    if args.hold_key != DEFAULTS["hold_key"]:
-        result["hold_key"] = args.hold_key
+    if args.modifier_key != DEFAULTS["modifier_key"]:
+        result["modifier_key"] = args.modifier_key
     if args.toggle_key != DEFAULTS["toggle_key"]:
         result["toggle_key"] = args.toggle_key
     return result
@@ -99,7 +99,7 @@ def _run_foreground(args):
             print(f"🦜 Server started on {server_url}")
 
         daemon = Daemon(
-            hold_key=cfg["hold_key"],
+            modifier_key=cfg["modifier_key"],
             toggle_key=cfg["toggle_key"],
             server_url=server_url,
             no_fix=cfg["no_fix"],
@@ -131,8 +131,8 @@ def _cmd_start(args):
         cmd += ["--fix-model", args.fix_model]
     if args.no_fix:
         cmd.append("--no-fix")
-    if args.hold_key != DEFAULTS["hold_key"]:
-        cmd += ["--hold-key", args.hold_key]
+    if args.modifier_key != DEFAULTS["modifier_key"]:
+        cmd += ["--modifier-key", args.modifier_key]
     if args.toggle_key != DEFAULTS["toggle_key"]:
         cmd += ["--toggle-key", args.toggle_key]
 
@@ -257,9 +257,9 @@ def main():
         help="Don't spawn the API server (run it separately)",
     )
     parser.add_argument(
-        "--hold-key",
-        default=DEFAULTS["hold_key"],
-        help=f"Hold key (default: {DEFAULTS['hold_key']})",
+        "--modifier-key",
+        default=DEFAULTS["modifier_key"],
+        help=f"Modifier key (default: {DEFAULTS['modifier_key']})",
     )
     parser.add_argument(
         "--toggle-key",
@@ -320,7 +320,7 @@ def daemon_main():
 
     cfg = resolve({})
     daemon = Daemon(
-        hold_key=cfg["hold_key"],
+        modifier_key=cfg["modifier_key"],
         toggle_key=cfg["toggle_key"],
         server_url=f"http://{HOST}:{PORT}",
         no_fix=cfg["no_fix"],

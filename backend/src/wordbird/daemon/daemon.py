@@ -41,7 +41,6 @@ MODIFIER_FLAGS = {
     "lctrl": Quartz.kCGEventFlagMaskControl,
 }
 
-# Pretty names for display
 KEY_LABELS = {
     "rcmd": "Right ⌘",
     "lcmd": "Left ⌘",
@@ -57,20 +56,16 @@ KEY_LABELS = {
     "escape": "Escape",
 }
 
-HOLD_THRESHOLD = 1.0
-
 
 class Daemon:
     """Background dictation daemon.
 
-    Two recording modes:
-    - Hold key + toggle key: toggle recording on/off
-    - Hold key for >1s: records while held, transcribes on release
+    Press modifier + toggle key to start/stop recording.
     """
 
     def __init__(
         self,
-        hold_key: str = "rcmd",
+        modifier_key: str = "rcmd",
         toggle_key: str = "space",
         server_url: str = "http://127.0.0.1:7870",
         no_fix: bool = False,
@@ -79,11 +74,12 @@ class Daemon:
         self._server_url = server_url
         self._no_fix = no_fix
 
-        self._hold_keycode = KEYCODES[hold_key]
-        self._hold_flag = MODIFIER_FLAGS[hold_key]
+        self._modifier_keycode = KEYCODES[modifier_key]
+        self._modifier_flag = MODIFIER_FLAGS[modifier_key]
         self._toggle_keycode = KEYCODES[toggle_key]
-        self._hold_key_label = KEY_LABELS.get(hold_key, hold_key)
-        self._toggle_key_label = KEY_LABELS.get(toggle_key, toggle_key)
+        self._modifier_label = KEY_LABELS.get(modifier_key, modifier_key)
+        self._toggle_label = KEY_LABELS.get(toggle_key, toggle_key)
+
         self.menubar = MenuBar.alloc().init()
         self.menubar.set_on_quit(self._on_quit)
         self.menubar.set_level_callback(lambda: self.recorder.level)
@@ -91,48 +87,54 @@ class Daemon:
         self.overlay = Overlay.alloc().init()
         self.overlay.set_level_callback(lambda: self.recorder.level)
         self.overlay.set_mic_ready_callback(lambda: self.recorder.mic_ready)
-        self.overlay.set_cancel_callback(self._abort_recording)
+        self.overlay.set_cancel_callback(self._abort)
+
+        self._modifier_down = False
         self._transcribing = False
         self._cancelled = False
 
-        self._rcmd_down = False
-        self._hold_mode = False
-        self._hold_timer: threading.Timer | None = None
-
     def apply_config(self, cfg: dict):
         """Apply configuration changes live."""
-        hold_key = cfg.get("hold_key", "rcmd")
+        modifier_key = cfg.get("modifier_key", "rcmd")
         toggle_key = cfg.get("toggle_key", "space")
-        self._hold_keycode = KEYCODES[hold_key]
-        self._hold_flag = MODIFIER_FLAGS[hold_key]
+        self._modifier_keycode = KEYCODES[modifier_key]
+        self._modifier_flag = MODIFIER_FLAGS[modifier_key]
         self._toggle_keycode = KEYCODES[toggle_key]
-        self._hold_key_label = KEY_LABELS.get(hold_key, hold_key)
-        self._toggle_key_label = KEY_LABELS.get(toggle_key, toggle_key)
+        self._modifier_label = KEY_LABELS.get(modifier_key, modifier_key)
+        self._toggle_label = KEY_LABELS.get(toggle_key, toggle_key)
         self._no_fix = cfg.get("no_fix", False)
+        print(f"   🔄 Config reloaded: {self._modifier_label} + {self._toggle_label}")
 
-        print(
-            f"   🔄 Config reloaded: {self._hold_key_label} + {self._toggle_key_label}"
-        )
-
-    def _set_state(self, state: State):
-        """Update menu bar state on the main thread."""
-        self.menubar.set_state(state)
+    def _toggle_recording(self):
+        """Toggle recording on/off."""
+        if self.recorder.is_recording:
+            self._stop_and_transcribe()
+        else:
+            self._start_recording()
 
     def _start_recording(self):
-        """Start recording if not already."""
+        """Start recording."""
         if self._transcribing:
             print("   ⏳ Still transcribing, please wait...")
             return
-        if not self.recorder.is_recording:
-            self._set_state(State.CONNECTING)
-            self.overlay.show_connecting()
-            print("   🔌 Connecting mic...")
-            self.recorder.start()
-            self._set_state(State.LISTENING)
-            print("   🎤 Recording...")
+        self.menubar.set_state(State.CONNECTING)
+        self.overlay.show_connecting()
+        print("   🔌 Connecting mic...")
+        self.recorder.start()
+
+        def _wait_for_mic():
+            import time
+
+            while self.recorder.is_recording and not self.recorder.mic_ready:
+                time.sleep(0.05)
+            if self.recorder.is_recording:
+                self.menubar.set_state(State.LISTENING)
+                print("   🎤 Listening...")
+
+        threading.Thread(target=_wait_for_mic, daemon=True).start()
 
     def _stop_and_transcribe(self):
-        """Stop recording and transcribe."""
+        """Stop recording and send to server for transcription."""
         if self._transcribing:
             return
         if not self.recorder.is_recording:
@@ -143,11 +145,11 @@ class Daemon:
 
         if not wav_bytes:
             print("   ⚠️  No audio captured.")
-            self._set_state(State.IDLE)
+            self.menubar.set_state(State.IDLE)
             self.overlay.hide()
             return
 
-        self._set_state(State.TRANSCRIBING)
+        self.menubar.set_state(State.TRANSCRIBING)
         self.overlay.show_transcribing()
         threading.Thread(
             target=self._transcribe_and_type,
@@ -248,110 +250,61 @@ class Daemon:
                 self.overlay.show_error("Transcription failed")
         finally:
             self._transcribing = False
-            self._set_state(State.IDLE)
-            if not self._rcmd_down:
-                self.recorder.close_mic()
+            self.menubar.set_state(State.IDLE)
 
-    def _on_hold_threshold(self):
-        """Called when hold key has been held for >1 second."""
-        if self._rcmd_down:
-            self._hold_mode = True
-            self._start_recording()
-
-    def _abort_recording(self):
+    def _abort(self):
         """Abort recording or transcription."""
         print("   ⛔ Cancelled.")
         self._cancelled = True
         if self.recorder.is_recording:
             self.recorder.stop()
-            self.recorder.close_mic()
-        self._set_state(State.IDLE)
+        self.menubar.set_state(State.IDLE)
         self.overlay.show_error("Cancelled")
 
     def _on_quit(self):
         """Clean up on quit."""
-        self.recorder.close_mic()
+        if self.recorder.is_recording:
+            self.recorder.stop()
 
     def _event_tap_callback(self, proxy, event_type, event, refcon):
-        """CGEventTap callback — handles hold key and toggle key."""
+        """CGEventTap callback — detects modifier + toggle key combo."""
         if event_type == Quartz.kCGEventFlagsChanged:
             keycode = Quartz.CGEventGetIntegerValueField(
                 event, Quartz.kCGKeyboardEventKeycode
             )
             flags = Quartz.CGEventGetFlags(event)
 
-            if keycode == self._hold_keycode:
-                cmd_pressed = bool(flags & self._hold_flag)
-
-                if cmd_pressed and not self._rcmd_down:
-                    self._rcmd_down = True
-                    self._hold_mode = False
-
-                    # Open mic in background so we don't block the event tap
-                    threading.Thread(target=self.recorder.open_mic, daemon=True).start()
-
-                    self._hold_timer = threading.Timer(
-                        HOLD_THRESHOLD, self._on_hold_threshold
-                    )
-                    self._hold_timer.start()
-
-                elif not cmd_pressed and self._rcmd_down:
-                    self._rcmd_down = False
-
-                    if self._hold_timer is not None:
-                        self._hold_timer.cancel()
-                        self._hold_timer = None
-
-                    if self._hold_mode:
-                        self._hold_mode = False
-                        self._stop_and_transcribe()
-
-                    # Close mic if we're not recording (toggle mode keeps it open)
-                    if not self.recorder.is_recording:
-                        self.recorder.close_mic()
+            if keycode == self._modifier_keycode:
+                self._modifier_down = bool(flags & self._modifier_flag)
 
         elif event_type == Quartz.kCGEventKeyDown:
             keycode = Quartz.CGEventGetIntegerValueField(
                 event, Quartz.kCGKeyboardEventKeycode
             )
 
-            # Escape aborts recording or transcription
+            # Escape aborts
             if keycode == 53 and (self.recorder.is_recording or self._transcribing):
-                self._abort_recording()
+                self._abort()
                 return None
 
-            if (
-                keycode == self._toggle_keycode
-                and self._rcmd_down
-                and not self._hold_mode
-            ):
-                if self._hold_timer is not None:
-                    self._hold_timer.cancel()
-                    self._hold_timer = None
-                if self.recorder.is_recording:
-                    self._stop_and_transcribe()
-                else:
-                    self._start_recording()
+            # Modifier + toggle key
+            if keycode == self._toggle_keycode and self._modifier_down:
+                self._toggle_recording()
                 return None
 
         return event
 
     def run(self):
         """Start the daemon. Blocks until interrupted."""
-        # Initialize NSApplication so the menu bar works
         app = AppKit.NSApplication.sharedApplication()
         app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
 
         self.menubar.setup()
         self.overlay.setup()
 
-        hold = self._hold_key_label
-        toggle = self._toggle_key_label
-
         print("\n🦜 Wordbird daemon is ready.\n")
         print(f"   🌐 Dashboard: {self._server_url}")
-        print(f"   ⌨️  {hold} + {toggle} — toggle recording")
-        print(f"   ⌨️  Hold {hold} (>1s) — record while held")
+        print(f"   ⌨️  {self._modifier_label} + {self._toggle_label} — toggle recording")
         print("   📋 Transcribed text is pasted into the focused app.")
         print("   🛑 Ctrl+C to quit.\n")
 
@@ -390,8 +343,6 @@ class Daemon:
         signal.signal(signal.SIGTERM, _handle_shutdown)
         signal.signal(signal.SIGINT, _handle_shutdown)
 
-        # NSApplication.run() overrides SIGINT on start, so re-register
-        # our handler shortly after the run loop begins
         def _reinstall_sigint():
             signal.signal(signal.SIGINT, _handle_shutdown)
 

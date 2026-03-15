@@ -27,7 +27,7 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [config, setConfig] = useState<ConfigData | null>(null)
-  const [holdKeyOptions, setHoldKeyOptions] = useState<string[]>([])
+  const [modifierKeyOptions, setModifierKeyOptions] = useState<string[]>([])
   const [toggleKeyOptions, setToggleKeyOptions] = useState<string[]>([])
   const [keyLabels, setKeyLabels] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
@@ -36,7 +36,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     if (open) {
       fetchConfig().then((data) => {
         setConfig(data.config)
-        setHoldKeyOptions(data.hold_key_options)
+        setModifierKeyOptions(data.modifier_key_options)
         setToggleKeyOptions(data.toggle_key_options)
         setKeyLabels(data.key_labels)
       })
@@ -66,16 +66,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="hold_key">Hold key</Label>
+            <Label htmlFor="modifier_key">Modifier key</Label>
             <Select
-              value={config.hold_key}
-              onValueChange={(v) => v && setConfig({ ...config, hold_key: v })}
+              value={config.modifier_key}
+              onValueChange={(v) => v && setConfig({ ...config, modifier_key: v })}
             >
-              <SelectTrigger id="hold_key">
+              <SelectTrigger id="modifier_key">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {holdKeyOptions.map((k) => (
+                {modifierKeyOptions.map((k) => (
                   <SelectItem key={k} value={k}>
                     {keyLabels[k] || k} ({k})
                   </SelectItem>

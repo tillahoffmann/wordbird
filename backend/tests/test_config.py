@@ -25,25 +25,25 @@ class TestResolve:
     def test_config_file_overrides_defaults(self, config_dir):
         _write_config(
             config_dir / "config.toml",
-            'hold_key = "lalt"\nfix_model = "some/model"\n',
+            'modifier_key = "lalt"\nfix_model = "some/model"\n',
         )
         result = resolve({})
-        assert result["hold_key"] == "lalt"
+        assert result["modifier_key"] == "lalt"
         assert result["fix_model"] == "some/model"
         assert result["toggle_key"] == DEFAULTS["toggle_key"]
 
     def test_cli_overrides_config_file(self, config_dir):
-        _write_config(config_dir / "config.toml", 'hold_key = "lalt"\n')
-        result = resolve({"hold_key": "rshift"})
-        assert result["hold_key"] == "rshift"
+        _write_config(config_dir / "config.toml", 'modifier_key = "lalt"\n')
+        result = resolve({"modifier_key": "rshift"})
+        assert result["modifier_key"] == "rshift"
 
     def test_front_matter_overrides_everything(self, config_dir):
-        _write_config(config_dir / "config.toml", 'hold_key = "lalt"\n')
+        _write_config(config_dir / "config.toml", 'modifier_key = "lalt"\n')
         result = resolve(
-            {"hold_key": "rshift"},
-            front_matter={"hold_key": "lcmd"},
+            {"modifier_key": "rshift"},
+            front_matter={"modifier_key": "lcmd"},
         )
-        assert result["hold_key"] == "lcmd"
+        assert result["modifier_key"] == "lcmd"
 
     def test_front_matter_partial_override(self, config_dir):
         result = resolve(
@@ -51,12 +51,12 @@ class TestResolve:
             front_matter={"fix_model": "project/model"},
         )
         assert result["fix_model"] == "project/model"
-        assert result["hold_key"] == DEFAULTS["hold_key"]
+        assert result["modifier_key"] == DEFAULTS["modifier_key"]
 
     def test_cli_none_does_not_override(self, config_dir):
-        _write_config(config_dir / "config.toml", 'hold_key = "lalt"\n')
-        result = resolve({"hold_key": None})
-        assert result["hold_key"] == "lalt"
+        _write_config(config_dir / "config.toml", 'modifier_key = "lalt"\n')
+        result = resolve({"modifier_key": None})
+        assert result["modifier_key"] == "lalt"
 
     def test_cli_false_does_not_override(self, config_dir):
         _write_config(config_dir / "config.toml", "no_fix = true\n")

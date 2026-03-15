@@ -16,7 +16,7 @@ from wordbird.server.history import record as record_transcription
 PORT = 7870
 HOST = "127.0.0.1"
 
-HOLD_KEY_OPTIONS = [
+MODIFIER_KEY_OPTIONS = [
     "rcmd",
     "lcmd",
     "ralt",
@@ -55,7 +55,7 @@ def _get_effective_config() -> dict:
 
 
 class ConfigUpdate(BaseModel):
-    hold_key: str | None = None
+    modifier_key: str | None = None
     toggle_key: str | None = None
     transcription_model: str | None = None
     fix_model: str | None = None
@@ -116,7 +116,7 @@ def create_app() -> FastAPI:
         cfg = _get_effective_config()
         return {
             "config": cfg,
-            "hold_key_options": HOLD_KEY_OPTIONS,
+            "modifier_key_options": MODIFIER_KEY_OPTIONS,
             "toggle_key_options": TOGGLE_KEY_OPTIONS,
             "key_labels": KEY_LABELS,
         }
@@ -126,7 +126,7 @@ def create_app() -> FastAPI:
         bw_config.ensure_config_dir()
         lines = []
         data = update.model_dump(exclude_none=True)
-        for key in ["hold_key", "toggle_key", "transcription_model", "fix_model"]:
+        for key in ["modifier_key", "toggle_key", "transcription_model", "fix_model"]:
             val = data.get(key, DEFAULTS[key])
             if val != DEFAULTS[key]:
                 lines.append(f'{key} = "{val}"')
