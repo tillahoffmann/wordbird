@@ -14,7 +14,7 @@ from wordbird.config import CONFIG_PATH, KEY_LABELS
 from wordbird.daemon.menubar import MenuBar, State
 from wordbird.daemon.overlay import Overlay
 from wordbird.daemon.recorder import Recorder
-from wordbird.daemon.typer import type_text
+from wordbird.daemon.typer import press_return, type_text
 
 # macOS keycodes
 KEYCODES = {
@@ -70,6 +70,8 @@ class Daemon:
         self._server_url = server_url
         self._no_fix = no_fix
         self._sound = True
+        self._submit_with_return = False
+        self._submit_after = False
 
         self._modifier_keycode = KEYCODES[modifier_key]
         self._modifier_flag = MODIFIER_FLAGS[modifier_key]
@@ -126,6 +128,7 @@ class Daemon:
         self._toggle_label = KEY_LABELS.get(toggle_key, toggle_key)
         self._no_fix = cfg.get("no_fix", False)
         self._sound = cfg.get("sound", True)
+        self._submit_with_return = cfg.get("submit_with_return", False)
         print(f"   🔄 Config reloaded: {self._modifier_label} + {self._toggle_label}")
 
     def _toggle_recording(self):
@@ -173,13 +176,14 @@ class Daemon:
 
         threading.Thread(target=_wait_for_mic, daemon=True).start()
 
-    def _stop_and_transcribe(self):
+    def _stop_and_transcribe(self, submit: bool = False):
         """Stop recording and send to server for transcription."""
         if self._transcribing:
             return
         if not self.recorder.is_recording:
             return
 
+        self._submit_after = submit
         print("   ⏹️  Stopped recording.")
         wav_bytes, duration = self.recorder.stop()
 
@@ -267,6 +271,11 @@ class Daemon:
             word_count = len(final_text.split())
 
             type_text(final_text)
+            if self._submit_after:
+                import time
+
+                time.sleep(0.05)
+                press_return()
             self.overlay.show_done(word_count)
 
             # Record in history via server
@@ -336,6 +345,16 @@ class Daemon:
             # Modifier + toggle key — swallow to prevent Spotlight etc.
             if keycode == self._toggle_keycode and self._modifier_down:
                 self._toggle_recording()
+                return None
+
+            # Modifier + Return — stop and submit (if enabled and recording)
+            if (
+                keycode == KEYCODES["return"]
+                and self._modifier_down
+                and self._submit_with_return
+                and self.recorder.is_recording
+            ):
+                self._stop_and_transcribe(submit=True)
                 return None
 
             # Escape aborts (but don't swallow it)

@@ -40,6 +40,7 @@ class ConfigUpdate(BaseModel):
     fix_model: str | None = None
     no_fix: bool = False
     sound: bool = True
+    submit_with_return: bool = False
 
 
 class PostProcessRequest(BaseModel):
@@ -126,6 +127,8 @@ def create_app() -> FastAPI:
             lines.append("no_fix = true")
         if not data.get("sound", True):
             lines.append("sound = false")
+        if data.get("submit_with_return"):
+            lines.append("submit_with_return = true")
         with open(bw_config.CONFIG_PATH, "w") as f:
             f.write("\n".join(lines) + "\n" if lines else "")
         return {"ok": True}

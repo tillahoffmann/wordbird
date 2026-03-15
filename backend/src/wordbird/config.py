@@ -86,6 +86,7 @@ DEFAULTS = {
     "fix_model": DEFAULT_FIX_MODEL,
     "no_fix": False,
     "sound": True,
+    "submit_with_return": False,
 }
 
 DEFAULT_CONFIG_TOML = """\

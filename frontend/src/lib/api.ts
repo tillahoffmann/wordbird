@@ -21,6 +21,7 @@ export interface ConfigData {
   fix_model: string
   no_fix: boolean
   sound: boolean
+  submit_with_return: boolean
 }
 
 export interface ConfigResponse {

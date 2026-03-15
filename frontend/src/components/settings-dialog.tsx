@@ -152,6 +152,26 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             />
             <Label htmlFor="sound">Play sound when mic is ready</Label>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="submit_with_return"
+              checked={config.submit_with_return}
+              onCheckedChange={(checked) =>
+                setConfig({ ...config, submit_with_return: checked === true })
+              }
+            />
+            <Label htmlFor="submit_with_return">
+              Submit with{" "}
+              <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
+                {keyLabels[config.modifier_key] || config.modifier_key}
+              </kbd>
+              {" + "}
+              <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
+                Return
+              </kbd>
+            </Label>
+          </div>
         </div>
         <DialogFooter>
           <Button onClick={handleSave} disabled={saving} className="w-full">
