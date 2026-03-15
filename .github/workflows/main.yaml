@@ -9,6 +9,9 @@ on:
 jobs:
   check:
     runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -23,26 +26,31 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: backend/dist
 
   publish-vscode:
     if: false  # TODO: enable once VSCE_PAT secret is configured
     needs: check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vscode-extension
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - working-directory: vscode
-        run: npm ci
-      - working-directory: vscode
-        run: npx tsc
-      - working-directory: vscode
-        run: npx vsce publish
+      - run: npm ci
+      - run: npx tsc
+      - run: npx vsce publish
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
