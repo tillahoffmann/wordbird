@@ -72,12 +72,14 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               onValueChange={(v) => v && setConfig({ ...config, modifier_key: v })}
             >
               <SelectTrigger id="modifier_key">
-                <SelectValue />
+                <SelectValue>
+                  {keyLabels[config.modifier_key] || config.modifier_key}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {modifierKeyOptions.map((k) => (
                   <SelectItem key={k} value={k}>
-                    {keyLabels[k] || k} ({k})
+                    {keyLabels[k] || k}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -91,12 +93,14 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               onValueChange={(v) => v && setConfig({ ...config, toggle_key: v })}
             >
               <SelectTrigger id="toggle_key">
-                <SelectValue />
+                <SelectValue>
+                  {keyLabels[config.toggle_key] || config.toggle_key}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {toggleKeyOptions.map((k) => (
                   <SelectItem key={k} value={k}>
-                    {keyLabels[k] || k} ({k})
+                    {keyLabels[k] || k}
                   </SelectItem>
                 ))}
               </SelectContent>
