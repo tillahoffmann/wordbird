@@ -1,6 +1,7 @@
 """FastAPI server for wordbird — API + ML inference + static frontend."""
 
 import os
+import sys
 import webbrowser
 
 # Disable huggingface_hub progress bars to avoid tqdm creating
@@ -139,6 +140,7 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         import atexit
+        import signal
 
         # Preload models on startup
         print("🦜 Preloading ML models...")
@@ -150,7 +152,14 @@ def create_app() -> FastAPI:
             pp.load()
         print("🦜 Models ready.")
 
-        # Register atexit as backup — handles abrupt termination in --reload mode
+        # Handle SIGTERM (sent by uvicorn --reload on shutdown).
+        # Without this, the process is killed before atexit/finalizers
+        # can clean up POSIX semaphores.
+        def _handle_term(signum, frame):
+            _cleanup()
+            sys.exit(0)
+
+        signal.signal(signal.SIGTERM, _handle_term)
         atexit.register(_cleanup)
 
         yield
