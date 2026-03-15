@@ -15,8 +15,8 @@
   "license": "MIT",
   "icon": "icon.png",
   "galleryBanner": {
-    "color": "#FFCC00",
-    "theme": "light"
+    "color": "#1a1a2e",
+    "theme": "dark"
   },
   "keywords": [
     "dictation",
