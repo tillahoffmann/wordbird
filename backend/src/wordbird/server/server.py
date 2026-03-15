@@ -10,6 +10,8 @@ from pydantic import BaseModel
 
 import wordbird.config as bw_config
 from wordbird.config import (
+    DEFAULT_HOST,
+    DEFAULT_PORT,
     DEFAULTS,
     KEY_LABELS,
     MODIFIER_KEY_OPTIONS,
@@ -17,9 +19,6 @@ from wordbird.config import (
 )
 from wordbird.server.history import recent, stats
 from wordbird.server.history import record as record_transcription
-
-PORT = 7870
-HOST = "127.0.0.1"
 
 PACKAGE_DIR = os.path.dirname(__file__)
 
@@ -76,6 +75,10 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # Prevent loky semaphore leaks from tokenizer/joblib workers
+        os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+        os.environ.setdefault("JOBLIB_START_METHOD", "forkserver")
+
         # Preload models on startup
         print("🦜 Preloading ML models...")
         t = _get_transcriber()
@@ -101,7 +104,7 @@ def create_app() -> FastAPI:
 
     @app.put("/api/config")
     def save_config(update: ConfigUpdate):
-        bw_config.ensure_config_dir()
+        bw_config.ensure_data_dir()
         lines = []
         data = update.model_dump(exclude_none=True)
         for key in ["modifier_key", "toggle_key", "transcription_model", "fix_model"]:
@@ -253,16 +256,37 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
+def _find_available_port(host: str, start_port: int, max_attempts: int = 10) -> int:
+    """Find an available port starting from start_port."""
+    import socket
+
+    for offset in range(max_attempts):
+        port = start_port + offset
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((host, port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError(
+        f"No available port found in range {start_port}-{start_port + max_attempts - 1}"
+    )
+
+
 def start_server(wait: bool = True, timeout: float = 120) -> tuple:
     """Start the server in a subprocess.
 
-    If wait=True, blocks until the server is healthy or timeout is reached.
+    Finds an available port (starting from DEFAULT_PORT), starts uvicorn,
+    writes server.json for the daemon, and waits for the health endpoint.
     """
     import subprocess
     import sys
     import time
 
     import httpx
+
+    host = DEFAULT_HOST
+    port = _find_available_port(host, DEFAULT_PORT)
 
     proc = subprocess.Popen(
         [
@@ -271,13 +295,13 @@ def start_server(wait: bool = True, timeout: float = 120) -> tuple:
             "uvicorn",
             "wordbird.server.server:app",
             "--host",
-            HOST,
+            host,
             "--port",
-            str(PORT),
+            str(port),
         ],
     )
 
-    url = f"http://{HOST}:{PORT}"
+    url = f"http://{host}:{port}"
 
     if wait:
         deadline = time.monotonic() + timeout
@@ -295,9 +319,21 @@ def start_server(wait: bool = True, timeout: float = 120) -> tuple:
             proc.terminate()
             raise RuntimeError(f"Server failed to start within {timeout}s")
 
+    # Write server info so daemon and CLI can discover the port
+    bw_config.write_server_info(host, port, proc.pid)
+
     return proc, url
+
+
+def server_url() -> str:
+    """Get the server URL, reading from server.json if available."""
+    info = bw_config.read_server_info()
+    if info:
+        host, port = info
+        return f"http://{host}:{port}"
+    return f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"
 
 
 def open_dashboard():
     """Open the dashboard in the default browser."""
-    webbrowser.open(f"http://{HOST}:{PORT}")
+    webbrowser.open(server_url())

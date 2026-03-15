@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import datetime, timezone
 
-from wordbird.config import DB_PATH, ensure_config_dir
+from wordbird.config import DB_PATH, ensure_data_dir
 
 _CREATE_TABLE = """\
 CREATE TABLE IF NOT EXISTS transcriptions (
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS transcriptions (
 
 
 def _connect() -> sqlite3.Connection:
-    ensure_config_dir()
+    ensure_data_dir()
     conn = sqlite3.connect(DB_PATH)
     conn.execute(_CREATE_TABLE)
     # Add word_count column if missing (migration for existing databases)

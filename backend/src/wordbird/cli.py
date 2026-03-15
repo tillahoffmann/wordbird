@@ -9,16 +9,15 @@ import sys
 from wordbird.config import (
     CONFIG_PATH,
     DEFAULT_CONFIG_TOML,
+    DEFAULT_HOST,
+    DEFAULT_PORT,
     DEFAULTS,
     LOG_PATH,
     PIDFILE,
-    ensure_config_dir,
+    ensure_data_dir,
     load_config,
+    remove_server_info,
 )
-from wordbird.server.server import HOST, PORT
-
-_SERVER_URL = f"http://{HOST}:{PORT}"
-
 
 # --- PID management ---
 
@@ -38,7 +37,7 @@ def _read_pid() -> int | None:
 
 
 def _write_pid():
-    ensure_config_dir()
+    ensure_data_dir()
     with open(PIDFILE, "w") as f:
         f.write(str(os.getpid()))
 
@@ -81,14 +80,15 @@ def _cli_overrides(args) -> dict:
     return result
 
 
-def _create_daemon(cfg: dict, server_url: str = _SERVER_URL):
+def _create_daemon(cfg: dict, url: str | None = None):
     """Create a Daemon from resolved config."""
     from wordbird.daemon.daemon import Daemon
+    from wordbird.server.server import server_url
 
     return Daemon(
         modifier_key=cfg["modifier_key"],
         toggle_key=cfg["toggle_key"],
-        server_url=server_url,
+        server_url=url or server_url(),
         no_fix=cfg["no_fix"],
     )
 
@@ -112,20 +112,21 @@ def _run_foreground(args):
         from wordbird.config import resolve
 
         cfg = resolve(_cli_overrides(args))
-        server_url = _SERVER_URL
+        url = None
 
         if not args.no_server:
             from wordbird.server.server import start_server
 
-            server_proc, server_url = start_server()
-            print(f"🦜 Server started on {server_url}")
+            server_proc, url = start_server()
+            print(f"🦜 Server started on {url}")
 
-        daemon = _create_daemon(cfg, server_url)
+        daemon = _create_daemon(cfg, url)
         daemon.run()
     finally:
         if server_proc is not None:
             server_proc.terminate()
             server_proc.wait(timeout=5)
+        remove_server_info()
         _remove_pid()
 
 
@@ -155,7 +156,7 @@ def _cmd_start(args):
     if "toggle_key" in overrides:
         cmd += ["--toggle-key", overrides["toggle_key"]]
 
-    ensure_config_dir()
+    ensure_data_dir()
     log_file = open(LOG_PATH, "a")
 
     proc = subprocess.Popen(
@@ -217,7 +218,7 @@ def _cmd_init(args):
 
 def _cmd_config(args):
     if not os.path.exists(CONFIG_PATH):
-        ensure_config_dir()
+        ensure_data_dir()
         with open(CONFIG_PATH, "w") as f:
             f.write(DEFAULT_CONFIG_TOML)
         print(f"   ✅ Created {CONFIG_PATH}")
@@ -312,7 +313,7 @@ def server_main():
     """Entry point for `wordbird-server`."""
     import uvicorn
 
-    uvicorn.run("wordbird.server.server:app", host=HOST, port=PORT)
+    uvicorn.run("wordbird.server.server:app", host=DEFAULT_HOST, port=DEFAULT_PORT)
 
 
 def daemon_main():

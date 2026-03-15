@@ -133,6 +133,16 @@ class Daemon:
         if self._transcribing:
             print("   ⏳ Still transcribing, please wait...")
             return
+
+        # Quick health check before opening the mic
+        try:
+            resp = httpx.get(f"{self._server_url}/api/health", timeout=2)
+            resp.raise_for_status()
+        except Exception:
+            print("   ❌ Server not reachable, cannot record.")
+            self.overlay.show_error("Server not reachable")
+            return
+
         self.menubar.set_state(State.CONNECTING)
         self.overlay.show_connecting()
         print("   🔌 Connecting mic...")
@@ -335,7 +345,18 @@ class Daemon:
         self.menubar.setup()
         self.overlay.setup()
 
-        print("\n🦜 Wordbird daemon is ready.\n")
+        # Verify the server is reachable before accepting hotkeys
+        print(f"\n   🔗 Checking server at {self._server_url}...")
+        try:
+            resp = httpx.get(f"{self._server_url}/api/health", timeout=5)
+            resp.raise_for_status()
+        except Exception as e:
+            print(f"   ❌ Server not reachable: {e}")
+            print("   Start the server first with: make backend-dev")
+            self.overlay.show_error("Server not reachable")
+            return
+
+        print("🦜 Wordbird daemon is ready.\n")
         print(f"   🌐 Dashboard: {self._server_url}")
         print(f"   ⌨️  {self._modifier_label} + {self._toggle_label} — toggle recording")
         print("   📋 Transcribed text is pasted into the focused app.")

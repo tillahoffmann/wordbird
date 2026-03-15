@@ -9,7 +9,7 @@ from wordbird.server import history
 def use_temp_db(tmp_path, monkeypatch):
     """Point the database to a temp file."""
     monkeypatch.setattr("wordbird.server.history.DB_PATH", str(tmp_path / "test.db"))
-    monkeypatch.setattr("wordbird.config.CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("wordbird.config.DATA_DIR", str(tmp_path))
 
 
 class TestHistory:

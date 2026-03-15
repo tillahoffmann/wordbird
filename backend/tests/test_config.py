@@ -8,7 +8,7 @@ from wordbird.config import DEFAULTS, resolve
 @pytest.fixture
 def config_dir(tmp_path, monkeypatch):
     """Point config to a temp directory."""
-    monkeypatch.setattr("wordbird.config.CONFIG_PATH", str(tmp_path / "config.toml"))
+    monkeypatch.setattr("wordbird.config.CONFIG_PATH", str(tmp_path / "wordbird.toml"))
     return tmp_path
 
 
@@ -24,7 +24,7 @@ class TestResolve:
 
     def test_config_file_overrides_defaults(self, config_dir):
         _write_config(
-            config_dir / "config.toml",
+            config_dir / "wordbird.toml",
             'modifier_key = "lalt"\nfix_model = "some/model"\n',
         )
         result = resolve({})
@@ -33,12 +33,12 @@ class TestResolve:
         assert result["toggle_key"] == DEFAULTS["toggle_key"]
 
     def test_cli_overrides_config_file(self, config_dir):
-        _write_config(config_dir / "config.toml", 'modifier_key = "lalt"\n')
+        _write_config(config_dir / "wordbird.toml", 'modifier_key = "lalt"\n')
         result = resolve({"modifier_key": "rshift"})
         assert result["modifier_key"] == "rshift"
 
     def test_front_matter_overrides_everything(self, config_dir):
-        _write_config(config_dir / "config.toml", 'modifier_key = "lalt"\n')
+        _write_config(config_dir / "wordbird.toml", 'modifier_key = "lalt"\n')
         result = resolve(
             {"modifier_key": "rshift"},
             front_matter={"modifier_key": "lcmd"},
@@ -54,11 +54,11 @@ class TestResolve:
         assert result["modifier_key"] == DEFAULTS["modifier_key"]
 
     def test_cli_none_does_not_override(self, config_dir):
-        _write_config(config_dir / "config.toml", 'modifier_key = "lalt"\n')
+        _write_config(config_dir / "wordbird.toml", 'modifier_key = "lalt"\n')
         result = resolve({"modifier_key": None})
         assert result["modifier_key"] == "lalt"
 
     def test_cli_false_does_not_override(self, config_dir):
-        _write_config(config_dir / "config.toml", "no_fix = true\n")
+        _write_config(config_dir / "wordbird.toml", "no_fix = true\n")
         result = resolve({"no_fix": False})
         assert result["no_fix"] is True

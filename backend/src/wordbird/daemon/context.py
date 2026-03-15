@@ -7,11 +7,11 @@ import subprocess
 
 import AppKit
 
-from wordbird.config import CONFIG_DIR
+from wordbird.config import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-ACTIVE_CONTEXT_PATH = os.path.join(CONFIG_DIR, "active-context.json")
+ACTIVE_CONTEXT_PATH = os.path.join(DATA_DIR, "active-context.json")
 
 _VSCODE_BUNDLE_IDS = {
     "com.microsoft.VSCode",
