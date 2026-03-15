@@ -2,21 +2,19 @@
 
 import json
 import logging
+import os
 import subprocess
 from pathlib import Path
 
 import AppKit
+import ApplicationServices
 
 from wordbird.config import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
 VSCODE_CONTEXT_PATH = DATA_DIR / "vscode-context.json"
-
-_VSCODE_BUNDLE_IDS = {
-    "com.microsoft.VSCode",
-    "com.microsoft.VSCodeInsiders",
-}
+EDITOR_CONTEXTS_DIR = DATA_DIR / "editor-contexts"
 
 
 def get_frontmost_app() -> tuple[str, str]:
@@ -102,8 +100,112 @@ def _is_child_of(child_pid: int, parent_pid: int) -> bool:
         return False
 
 
-def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
-    """Read workspace and WORDBIRD.md from active-context.json."""
+def _process_is_alive(pid: int) -> bool:
+    """Check if a process is still running."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
+
+def _get_focused_window_title(pid: int) -> str | None:
+    """Get the title of the focused window for a given PID using Accessibility API."""
+    try:
+        app_ref = ApplicationServices.AXUIElementCreateApplication(pid)
+        err, focused_window = ApplicationServices.AXUIElementCopyAttributeValue(
+            app_ref, "AXFocusedWindow", None
+        )
+        if err or focused_window is None:
+            return None
+        err, title = ApplicationServices.AXUIElementCopyAttributeValue(
+            focused_window, "AXTitle", None
+        )
+        if err or title is None:
+            return None
+        return str(title)
+    except Exception:
+        logger.debug("Failed to get window title for pid %d", pid, exc_info=True)
+        return None
+
+
+def _cleanup_stale_contexts():
+    """Remove context files for processes that are no longer running."""
+    if not EDITOR_CONTEXTS_DIR.is_dir():
+        return
+    for path in EDITOR_CONTEXTS_DIR.iterdir():
+        if not path.suffix == ".json":
+            continue
+        try:
+            data = json.loads(path.read_text())
+            pid = data.get("pid")
+            if pid is not None and not _process_is_alive(pid):
+                path.unlink()
+                logger.debug("Cleaned up stale context: %s (pid %d)", path.name, pid)
+        except Exception:
+            # Malformed file — remove it
+            try:
+                path.unlink()
+            except Exception:
+                pass
+
+
+def _read_editor_contexts(frontmost_pid: int) -> tuple[str | None, str | None]:
+    """Scan editor-contexts/ for the context matching the frontmost app.
+
+    Cleans up stale context files first, then matches by PID ancestry.
+    If multiple candidates match, uses the focused window title to disambiguate,
+    falling back to the most recently modified file.
+    """
+    _cleanup_stale_contexts()
+
+    if not EDITOR_CONTEXTS_DIR.is_dir():
+        return None, None
+
+    # Collect candidates that belong to the frontmost app
+    candidates: list[tuple[float, str | None, str | None]] = []
+    for path in EDITOR_CONTEXTS_DIR.iterdir():
+        if not path.suffix == ".json":
+            continue
+        try:
+            data = json.loads(path.read_text())
+        except Exception:
+            continue
+
+        ctx_pid = data.get("pid")
+        if ctx_pid is None:
+            continue
+
+        if ctx_pid != frontmost_pid and not _is_child_of(ctx_pid, frontmost_pid):
+            continue
+
+        workspace = data.get("workspace")
+        wordbird_md = data.get("wordbird_md")
+        mtime = path.stat().st_mtime
+        candidates.append((mtime, workspace, wordbird_md))
+
+    if not candidates:
+        return None, None
+
+    if len(candidates) == 1:
+        _, workspace, wordbird_md = candidates[0]
+        return workspace, wordbird_md
+
+    # Multiple candidates — match by focused window title
+    title = _get_focused_window_title(frontmost_pid)
+    if title:
+        for _, workspace, wordbird_md in candidates:
+            if workspace and Path(workspace).name in title:
+                return workspace, wordbird_md
+
+    # Fallback: most recently modified
+    candidates.sort(reverse=True)
+    _, workspace, wordbird_md = candidates[0]
+    return workspace, wordbird_md
+
+
+def _read_vscode_context(frontmost_pid: int) -> tuple[str | None, str | None]:
+    """Legacy: read from vscode-context.json (fallback for old VS Code extension)."""
     try:
         data = json.loads(VSCODE_CONTEXT_PATH.read_text())
 
@@ -115,7 +217,7 @@ def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
     except FileNotFoundError:
         return None, None
     except Exception:
-        logger.debug("Failed to read active-context.json", exc_info=True)
+        logger.debug("Failed to read vscode-context.json", exc_info=True)
         return None, None
 
 
@@ -149,10 +251,14 @@ def get_context() -> tuple[str, str | None, str | None]:
                     context_content = context_file.read_text()
                 except Exception:
                     logger.debug("Failed to read %s", context_file, exc_info=True)
-
-    elif bundle_id in _VSCODE_BUNDLE_IDS:
+    else:
+        # Try editor-contexts/ first (works for any editor with an extension)
         ws = AppKit.NSWorkspace.sharedWorkspace()
         frontmost_pid = ws.frontmostApplication().processIdentifier()
-        cwd, context_content = _read_active_context(frontmost_pid)
+        cwd, context_content = _read_editor_contexts(frontmost_pid)
+
+        # Fallback to legacy vscode-context.json
+        if cwd is None and context_content is None:
+            cwd, context_content = _read_vscode_context(frontmost_pid)
 
     return app_name, cwd, context_content
