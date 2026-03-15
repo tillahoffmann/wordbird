@@ -61,13 +61,14 @@ class PostProcessor:
         if self._loaded_model_id == model_id:
             return
         print(f"   ✨ Loading post-processor ({model_id})...")
-        self._model = None
-        self._tokenizer = None
         import gc
 
-        gc.collect()
         import mlx.core as mx
 
+        mx.synchronize()
+        self._model = None
+        self._tokenizer = None
+        gc.collect()
         mx.clear_cache()
         result = load(model_id)
         self._model, self._tokenizer = result[0], result[1]

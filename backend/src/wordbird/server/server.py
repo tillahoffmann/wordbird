@@ -95,11 +95,15 @@ def create_app() -> FastAPI:
     def _cleanup():
         """Release ML models and worker pools."""
         _ml_executor.shutdown(wait=False)
-        _ml_state["transcriber"] = None
-        _ml_state["postprocessor"] = None
         try:
+            import gc
+
             import mlx.core as mx
 
+            mx.synchronize()
+            _ml_state["transcriber"] = None
+            _ml_state["postprocessor"] = None
+            gc.collect()
             mx.clear_cache()
         except Exception:
             pass

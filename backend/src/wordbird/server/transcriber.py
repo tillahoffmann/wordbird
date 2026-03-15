@@ -24,12 +24,13 @@ class Transcriber:
             return
 
         print(f"   🧠 Loading transcription model ({model_id})...")
-        self._model = None
         import gc
 
-        gc.collect()
         import mlx.core as mx
 
+        mx.synchronize()
+        self._model = None
+        gc.collect()
         mx.clear_cache()
         self._model = load_model(model_id)
         self._loaded_model_id = model_id
