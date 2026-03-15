@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Toaster } from "@/components/ui/sonner"
+import { Input } from "@/components/ui/input"
 import { StatsBar } from "@/components/stats-bar"
 import { TranscriptList } from "@/components/transcript-list"
 import { SettingsDialog } from "@/components/settings-dialog"
@@ -11,6 +12,18 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(
     window.location.hash === "#settings"
   )
+  const [search, setSearch] = useState("")
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return transcriptions
+    const q = search.toLowerCase()
+    return transcriptions.filter(
+      (t) =>
+        t.raw_text.toLowerCase().includes(q) ||
+        (t.fixed_text && t.fixed_text.toLowerCase().includes(q)) ||
+        (t.app_name && t.app_name.toLowerCase().includes(q))
+    )
+  }, [transcriptions, search])
 
   function refresh() {
     fetchStats().then(setStats)
@@ -69,8 +82,18 @@ function App() {
 
       <StatsBar stats={stats} />
 
+      {transcriptions.length > 0 && (
+        <div className="shrink-0 mb-3">
+          <Input
+            placeholder="Search transcriptions..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto min-h-0 pb-4">
-        <TranscriptList transcriptions={transcriptions} onDelete={refresh} />
+        <TranscriptList transcriptions={filtered} onDelete={refresh} />
       </div>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpenWithHash} />
