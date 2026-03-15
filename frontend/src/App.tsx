@@ -30,12 +30,19 @@ function App() {
     const onHashChange = () => {
       setSettingsOpen(window.location.hash === "#settings")
     }
+    // Sync dark mode with system preference
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)")
+    const onDarkChange = (e: MediaQueryListEvent) => {
+      document.documentElement.classList.toggle("dark", e.matches)
+    }
+    darkQuery.addEventListener("change", onDarkChange)
     window.addEventListener("focus", onFocus)
     window.addEventListener("hashchange", onHashChange)
     return () => {
       clearInterval(interval)
       window.removeEventListener("focus", onFocus)
       window.removeEventListener("hashchange", onHashChange)
+      darkQuery.removeEventListener("change", onDarkChange)
     }
   }, [])
 
