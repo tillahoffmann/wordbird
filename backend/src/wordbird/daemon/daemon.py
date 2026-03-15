@@ -61,23 +61,24 @@ class Daemon:
 
     def __init__(
         self,
-        modifier_key: str = "rcmd",
-        toggle_key: str = "space",
+        cfg: dict,
         server_url: str = "http://127.0.0.1:7870",
-        no_fix: bool = False,
     ):
         self.recorder = Recorder()
         self._server_url = server_url
-        self._no_fix = no_fix
-        self._sound = True
-        self._submit_with_return = False
         self._submit_after = False
 
-        self._modifier_keycode = KEYCODES[modifier_key]
-        self._modifier_flag = MODIFIER_FLAGS[modifier_key]
-        self._toggle_keycode = KEYCODES[toggle_key]
-        self._modifier_label = KEY_LABELS.get(modifier_key, modifier_key)
-        self._toggle_label = KEY_LABELS.get(toggle_key, toggle_key)
+        # Set defaults before apply_config overwrites them
+        self._modifier_keycode = KEYCODES["rcmd"]
+        self._modifier_flag = MODIFIER_FLAGS["rcmd"]
+        self._toggle_keycode = KEYCODES["space"]
+        self._modifier_label = KEY_LABELS["rcmd"]
+        self._toggle_label = KEY_LABELS["space"]
+        self._no_fix = False
+        self._sound = True
+        self._submit_with_return = False
+
+        self.apply_config(cfg)
 
         self.menubar = MenuBar.alloc().init()
         self.menubar.set_on_quit(self._on_quit)

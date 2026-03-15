@@ -79,10 +79,8 @@ def _create_daemon(cfg: dict, url: str | None = None):
     from wordbird.server.server import server_url
 
     return Daemon(
-        modifier_key=cfg["modifier_key"],
-        toggle_key=cfg["toggle_key"],
+        cfg=cfg,
         server_url=url or server_url(),
-        no_fix=cfg["no_fix"],
     )
 
 

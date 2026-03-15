@@ -60,8 +60,22 @@ class HistoryRecord(BaseModel):
 
 
 def create_app() -> FastAPI:
-    # ML models — shared state
+    # ML models — shared state, all inference runs on a single dedicated thread
+    # to avoid creating multiple loky worker pools
+    from concurrent.futures import ThreadPoolExecutor
+
     _ml_state: dict = {"transcriber": None, "postprocessor": None}
+    _ml_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ml")
+
+    async def _run_ml(func, *args, **kwargs):
+        """Run a function on the dedicated ML thread."""
+        import asyncio
+        import functools
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            _ml_executor, functools.partial(func, *args, **kwargs)
+        )
 
     def _get_transcriber():
         if _ml_state["transcriber"] is None:
@@ -89,10 +103,17 @@ def create_app() -> FastAPI:
             pp.load()
         print("🦜 Models ready.")
         yield
-        # Clean shutdown: release ML models and worker pools
+        # Clean shutdown: stop the ML thread, release models, clean up workers
         print("🦜 Shutting down...")
+        _ml_executor.shutdown(wait=True)
         _ml_state["transcriber"] = None
         _ml_state["postprocessor"] = None
+        try:
+            import mlx.core as mx
+
+            mx.clear_cache()
+        except Exception:
+            pass
         try:
             from joblib.externals.loky import get_reusable_executor
 
@@ -144,8 +165,6 @@ def create_app() -> FastAPI:
         context_content: str = Form(""),
     ):
         """Transcribe audio to text (speech-to-text only)."""
-        import asyncio
-
         wav_bytes = await audio.read()
 
         from wordbird.prompt import parse_wordbird_md
@@ -157,9 +176,7 @@ def create_app() -> FastAPI:
         transcription_model = front_matter.get("transcription_model")
 
         t = _get_transcriber()
-        raw_text = await asyncio.to_thread(
-            t.transcribe, wav_bytes, model_id=transcription_model
-        )
+        raw_text = await _run_ml(t.transcribe, wav_bytes, model_id=transcription_model)
 
         return {
             "raw_text": raw_text or "",
@@ -169,10 +186,8 @@ def create_app() -> FastAPI:
     @app.post("/api/postprocess")
     async def postprocess(req: PostProcessRequest):
         """Post-process transcribed text with LLM."""
-        import asyncio
-
         pp = _get_postprocessor()
-        fixed_text, _ = await asyncio.to_thread(
+        fixed_text, _ = await _run_ml(
             pp.fix, req.text, context_content=req.context_content or None
         )
         return {
@@ -200,8 +215,6 @@ def create_app() -> FastAPI:
         Used by external clients (Claude plugin, etc.) that don't need
         intermediate UI updates.
         """
-        import asyncio
-
         wav_bytes = await audio.read()
 
         from wordbird.prompt import parse_wordbird_md
@@ -213,9 +226,7 @@ def create_app() -> FastAPI:
         transcription_model = front_matter.get("transcription_model")
 
         t = _get_transcriber()
-        raw_text = await asyncio.to_thread(
-            t.transcribe, wav_bytes, model_id=transcription_model
-        )
+        raw_text = await _run_ml(t.transcribe, wav_bytes, model_id=transcription_model)
 
         if not raw_text:
             return {"raw_text": "", "fixed_text": None, "word_count": 0}
@@ -226,7 +237,7 @@ def create_app() -> FastAPI:
 
         if not skip_fix:
             pp = _get_postprocessor()
-            fixed_text, _ = await asyncio.to_thread(
+            fixed_text, _ = await _run_ml(
                 pp.fix, raw_text, context_content=context_content or None
             )
 
