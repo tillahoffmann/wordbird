@@ -8,8 +8,8 @@ import sys
 
 from wordbird.config import (
     CONFIG_PATH,
-    DEFAULTS,
     DEFAULT_CONFIG_TOML,
+    DEFAULTS,
     LOG_PATH,
     PIDFILE,
     ensure_config_dir,

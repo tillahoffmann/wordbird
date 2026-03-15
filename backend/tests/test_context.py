@@ -2,7 +2,7 @@
 
 import json
 
-from wordbird.daemon.context import find_context_file, _read_active_context
+from wordbird.daemon.context import _read_active_context, find_context_file
 
 
 class TestFindContextFile:

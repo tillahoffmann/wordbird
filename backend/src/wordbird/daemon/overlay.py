@@ -2,29 +2,29 @@
 
 import collections
 
+import Foundation
+import objc
+import Quartz
 from AppKit import (
-    NSWindow,
-    NSWindowStyleMaskBorderless,
     NSBackingStoreBuffered,
-    NSFloatingWindowLevel,
+    NSButton,
     NSColor,
-    NSScreen,
+    NSFloatingWindowLevel,
     NSFont,
     NSFontWeightMedium,
     NSFontWeightRegular,
-    NSTextAlignmentCenter,
-    NSTextField,
-    NSImageView,
     NSImage,
     NSImageSymbolConfiguration,
+    NSImageView,
+    NSScreen,
+    NSTextAlignmentCenter,
+    NSTextField,
+    NSView,
+    NSWindow,
     NSWindowCollectionBehaviorCanJoinAllSpaces,
     NSWindowCollectionBehaviorStationary,
-    NSView,
-    NSButton,
+    NSWindowStyleMaskBorderless,
 )
-import Foundation
-import Quartz
-import objc
 
 
 def _rgb(r, g, b, a=1.0):

@@ -5,7 +5,7 @@ import wave
 
 import numpy as np
 
-from wordbird.daemon.recorder import Recorder, SAMPLE_RATE
+from wordbird.daemon.recorder import SAMPLE_RATE, Recorder
 
 
 class TestRecorder:

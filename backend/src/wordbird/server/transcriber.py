@@ -39,6 +39,7 @@ class Transcriber:
             tmp_path = f.name
 
         try:
+            assert self._model is not None
             result = self._model.generate(tmp_path)
             return result.text.strip()
         finally:

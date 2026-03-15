@@ -1,7 +1,7 @@
 """Post-process transcription output using a small local LLM."""
 
 import jinja2
-from mlx_lm import load, generate
+from mlx_lm import generate, load
 
 from wordbird.prompt import DEFAULT_FIX_MODEL, DEFAULT_TEMPLATE, parse_wordbird_md
 
@@ -34,7 +34,8 @@ class PostProcessor:
         if self._loaded_model_id == model_id:
             return
         print(f"   ✨ Loading post-processor ({model_id})...")
-        self._model, self._tokenizer = load(model_id)
+        result = load(model_id)
+        self._model, self._tokenizer = result[0], result[1]
         self._loaded_model_id = model_id
         print("   ✨ Post-processor ready.")
 
@@ -61,7 +62,9 @@ class PostProcessor:
             {"role": "user", "content": user_msg},
         ]
 
-        prompt = self._tokenizer.apply_chat_template(
+        assert self._model is not None and self._tokenizer is not None
+
+        prompt = self._tokenizer.apply_chat_template(  # type: ignore[reportCallIssue]
             messages, tokenize=False, add_generation_prompt=True
         )
 

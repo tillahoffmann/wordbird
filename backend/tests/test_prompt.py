@@ -1,7 +1,7 @@
 """Tests for prompt template parsing and rendering."""
 
-from wordbird.server.postprocess import render_prompt
 from wordbird.prompt import DEFAULT_TEMPLATE, parse_wordbird_md
+from wordbird.server.postprocess import render_prompt
 
 
 class TestParseWordbirdMd:

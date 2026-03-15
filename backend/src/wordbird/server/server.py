@@ -4,13 +4,14 @@ import os
 import webbrowser
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import wordbird.config as bw_config
 from wordbird.config import DEFAULTS
-from wordbird.server.history import recent, stats, record as record_transcription
+from wordbird.server.history import recent, stats
+from wordbird.server.history import record as record_transcription
 
 PORT = 7870
 HOST = "127.0.0.1"
