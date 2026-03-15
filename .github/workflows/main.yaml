@@ -32,6 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      - run: cp ../README.md .
       - run: uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
