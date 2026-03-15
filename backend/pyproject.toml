@@ -43,6 +43,10 @@ wordbird = "wordbird.cli:main"
 wordbird-server = "wordbird.cli:server_main"
 wordbird-daemon = "wordbird.cli:daemon_main"
 
+[tool.pytest.ini_options]
+markers = ["slow: tests that download and load ML models"]
+addopts = "-m 'not slow'"
+
 [tool.ruff.lint]
 extend-select = ["I"]
 
