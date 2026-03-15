@@ -4,9 +4,14 @@ import os
 import sys
 import webbrowser
 
-# Disable huggingface_hub progress bars to avoid tqdm creating
-# multiprocessing semaphores that leak on abrupt shutdown.
-os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+# Prevent tqdm from creating a multiprocessing lock. huggingface_hub uses
+# tqdm.contrib.concurrent.thread_map for downloads, which creates an RLock
+# with a POSIX semaphore. On SIGTERM (e.g., uvicorn --reload), the process
+# dies before the semaphore can be unlinked, causing resource tracker warnings.
+# Setting mp_lock to None uses tqdm's own guard: `if not hasattr(cls, 'mp_lock')`.
+import tqdm.std
+
+tqdm.std.TqdmDefaultWriteLock.mp_lock = None
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -126,28 +131,10 @@ def create_app() -> FastAPI:
             get_reusable_executor().shutdown(wait=False, kill_workers=True)
         except Exception:
             pass
-        # Clean up tqdm's multiprocessing semaphore. tqdm creates a class-level
-        # RLock with a POSIX semaphore that is never released. Remove all
-        # references so Python's finalizer can unlink it before the resource
-        # tracker complains.
-        try:
-            import tqdm.std
-
-            cls = tqdm.std.TqdmDefaultWriteLock
-            mp_lock = getattr(cls, "mp_lock", None)
-            if mp_lock is not None:
-                cls.mp_lock = None
-                lock_inst = tqdm.tqdm.get_lock()
-                lock_inst.locks = [lk for lk in lock_inst.locks if lk is not mp_lock]
-                del mp_lock
-                gc.collect()
-        except Exception:
-            pass
+        gc.collect()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        import atexit
-
         # Preload models on startup
         print("🦜 Preloading ML models...")
         t = _get_transcriber()
@@ -158,15 +145,10 @@ def create_app() -> FastAPI:
             pp.load()
         print("🦜 Models ready.")
 
-        # atexit handles cleanup when process is killed before lifespan
-        # shutdown runs (e.g., uvicorn --reload sending SIGTERM).
-        atexit.register(_cleanup)
-
         yield
 
         print("🦜 Shutting down...")
         _cleanup()
-        atexit.unregister(_cleanup)
 
     app = FastAPI(title="Wordbird", lifespan=lifespan)
 
