@@ -26,6 +26,7 @@ KEYCODES = {
     "lshift": 56,
     "rctrl": 62,
     "lctrl": 59,
+    "fn": 63,
     "space": 49,
     "return": 36,
     "tab": 48,
@@ -42,6 +43,7 @@ MODIFIER_FLAGS = {
     "lshift": Quartz.kCGEventFlagMaskShift,
     "rctrl": Quartz.kCGEventFlagMaskControl,
     "lctrl": Quartz.kCGEventFlagMaskControl,
+    "fn": Quartz.kCGEventFlagMaskSecondaryFn,
 }
 
 # How often to check if the event tap is still enabled (seconds)
