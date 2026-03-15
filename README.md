@@ -1,5 +1,8 @@
 # 🦜 Wordbird
 
+[![CI](https://github.com/tillahoffmann/wordbird/actions/workflows/main.yaml/badge.svg)](https://github.com/tillahoffmann/wordbird/actions/workflows/main.yaml)
+[![PyPI](https://img.shields.io/pypi/v/wordbird)](https://pypi.org/project/wordbird/)
+
 Contextual voice dictation for macOS. Powered by [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) running locally on Apple Silicon via [MLX](https://github.com/ml-explore/mlx).
 
 Press a hotkey, speak, and your words are transcribed and pasted into whatever app is focused. A small LLM post-processes the transcription to fix errors, using project-specific context from a `WORDBIRD.md` file.
@@ -18,9 +21,24 @@ uvx wordbird stop
 uvx wordbird status
 ```
 
+## Architecture
+
+Wordbird runs as two sibling processes managed by a thin CLI:
+
+- **Server** (`wordbird-server`) — FastAPI app handling transcription, post-processing, history, config, and serving the React dashboard
+- **Daemon** (`wordbird-daemon`) — macOS-native process handling hotkeys, mic recording, overlay HUD, menu bar, and clipboard pasting
+
+The daemon sends recorded audio to the server via HTTP. The server runs ML inference in a thread pool so the dashboard stays responsive during transcription.
+
+```
+uvx wordbird          # starts both (recommended)
+uvx wordbird-server   # just the API server
+uvx wordbird-daemon   # just the daemon (expects server running)
+```
+
 ## Context-aware correction
 
-The key idea behind wordbird is **contextual transcription correction**. When dictating into **Terminal.app**, wordbird detects the focused tab's working directory and looks for a `WORDBIRD.md` file up the directory tree. This lets you teach wordbird your project's domain:
+When dictating into **Terminal.app**, Wordbird detects the focused tab's working directory and looks for a `WORDBIRD.md` file up the directory tree. This lets you teach Wordbird your project's terms:
 
 Context detection works with:
 - **Terminal.app** — detects the focused tab's shell working directory
@@ -32,7 +50,7 @@ Transcription and pasting work in any app.
 uvx wordbird init
 ```
 
-This creates a `WORDBIRD.md` with the default prompt template. Edit it to add your project's terms, names, and jargon:
+This creates a `WORDBIRD.md` with the default prompt template. Edit it to add your project's terms:
 
 ```markdown
 ---
@@ -40,42 +58,28 @@ transcription_model: mlx-community/parakeet-tdt-0.6b-v2
 fix_model: mlx-community/Qwen2.5-1.5B-Instruct-4bit
 ---
 
-Fix transcription errors. Output only the corrected text.
+{# Your correction prompt and examples here #}
 
-Example 1:
-Input: "the java script function isnt working"
-Output: "The JavaScript function isn't working."
-
-Example 2:
-Input: "check the get ignore file for the repo"
-Output: "Check the .gitignore file for the repo."
-
-Example 3:
-Input: "we need to refactor the a p i endpoint"
-Output: "We need to refactor the API endpoint."
-
-Key terms: MyClass, some_function, PostgreSQL
-Names: Alice, Bob
+{# Key terms: MyApp, some_function, PostgreSQL #}
+{# Names: Alice, Bob #}
+{# Misheard words: "bird word" should be "Birdword" #}
 
 Input: "{{ transcript }}"
 Output:
 ```
 
-The file is a [Jinja template](https://jinja.palletsprojects.com/). `{{ transcript }}` is replaced with the raw transcription. If omitted, the transcript is appended automatically.
+The file is a [Jinja template](https://jinja.palletsprojects.com/). `{{ transcript }}` is replaced with the raw transcription. The YAML front matter lets you override models per-project.
 
-The YAML front matter lets you override models per-project. When you dictate into a Terminal tab whose shell is in that directory (or a child), wordbird picks up the nearest `WORDBIRD.md` and uses it.
-
-## Hotkeys
+## Hotkey
 
 | Action | Default |
 |---|---|
 | Toggle recording | Right ⌘ + Space |
-| Hold to record | Hold Right ⌘ for >1s, release to transcribe |
 
-Hotkeys are configurable:
+Configurable via CLI flags or the dashboard settings:
 
 ```
---hold-key KEY       Hold key (default: rcmd). Options: rcmd, lcmd, ralt, lalt, rshift, lshift, rctrl, lctrl
+--modifier-key KEY   Modifier key (default: rcmd). Options: rcmd, lcmd, ralt, lalt, rshift, lshift, rctrl, lctrl
 --toggle-key KEY     Toggle key (default: space). Options: space, return, tab, escape
 ```
 
@@ -85,20 +89,33 @@ Hotkeys are configurable:
 --model MODEL        Transcription model (default: mlx-community/parakeet-tdt-0.6b-v2)
 --fix-model MODEL    Post-processor model (default: mlx-community/Qwen2.5-1.5B-Instruct-4bit)
 --no-fix             Disable LLM post-processing
+--no-server          Don't spawn the API server (run it separately)
 ```
 
 ## Dashboard
 
-Wordbird runs a local web dashboard at [localhost:7870](http://localhost:7870). Click the bird in the menu bar → **Dashboard…** to open it.
+Wordbird runs a local web dashboard (default [localhost:7870](http://localhost:7870)). Click the bird in the menu bar → **Dashboard…** to open it.
 
-- 📝 **History** — browse all your transcriptions with timestamps, app name, working directory, and duration. See both the original and corrected text.
-- ⚙️ **Settings** — configure hotkeys, models, and post-processing. Changes take effect immediately without restarting.
-
-You can also view history from the command line:
+- **History** — browse transcriptions with timestamps, app name, working directory, and duration. See both original and corrected text.
+- **Settings** — configure hotkey, models, and post-processing. Changes take effect within seconds.
+- **Stats** — words dictated, recording time, WPM, session count.
 
 ```bash
-uvx wordbird history
+uvx wordbird history        # view history from the CLI
+uvx wordbird config         # show or create the config file
 ```
+
+## Data
+
+All data is stored in `~/.wordbird/`:
+
+| File | Purpose |
+|---|---|
+| `wordbird.toml` | User configuration |
+| `wordbird.db` | Transcription history (SQLite) |
+| `server.json` | Server port discovery |
+| `wordbird.pid` | Singleton lock |
+| `wordbird.log` | Background mode logs |
 
 ## Menu bar
 
@@ -114,10 +131,21 @@ Wordbird shows a bird icon in the menu bar:
 Wordbird needs three macOS permissions, granted to your terminal app:
 
 - 🎤 **Microphone** — to record your voice
-- 🔐 **Accessibility** — to paste text and intercept the hotkey
+- 🔐 **Accessibility** — to paste text
 - ⌨️ **Input Monitoring** — to detect the global hotkey
 
 Wordbird checks these on startup and tells you what's missing.
+
+## Development
+
+```bash
+make backend-dev      # API server with hot reload
+make daemon-dev       # daemon only (expects server running)
+make frontend-dev     # Vite dev server with API proxy
+make dev              # backend + frontend dev servers
+make wordbird         # build frontend + run everything
+make backend-test     # run pytest
+```
 
 ## License
 
