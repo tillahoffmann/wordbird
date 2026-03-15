@@ -286,6 +286,14 @@ class Overlay(Foundation.NSObject):
         self._tick += 1
 
     @objc.python_method
+    def show_warming(self):
+        self._main("doShowWarming:")
+
+    def doShowWarming_(self, _):
+        self._stop_timer()
+        self._show_pill("flame.fill", "Warming up", _rgb(255, 149, 0))
+
+    @objc.python_method
     def show_transcribing(self):
         self._main("doShowTranscribing:")
 

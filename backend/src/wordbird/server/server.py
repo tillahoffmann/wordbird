@@ -171,6 +171,24 @@ def create_app() -> FastAPI:
     def health():
         return {"ok": True}
 
+    @app.post("/api/models/transcription/load")
+    async def load_transcription_model():
+        """Ensure the transcription model is loaded. Blocks until ready."""
+        cfg = _get_effective_config()
+        t = _get_transcriber()
+        await _run_ml(t.load, cfg.get("transcription_model"))
+        return {"ok": True, "model": t._loaded_model_id}
+
+    @app.post("/api/models/postprocess/load")
+    async def load_postprocess_model():
+        """Ensure the post-processing model is loaded. Blocks until ready."""
+        cfg = _get_effective_config()
+        if cfg.get("no_fix"):
+            return {"ok": True, "model": None}
+        pp = _get_postprocessor()
+        await _run_ml(pp.load, cfg.get("fix_model"))
+        return {"ok": True, "model": pp._loaded_model_id}
+
     @app.post("/api/transcribe")
     async def transcribe(
         audio: UploadFile = File(...),

@@ -159,9 +159,25 @@ class Daemon:
         print("   🔌 Connecting mic...")
         self.recorder.start()
 
+        def _warm_models():
+            """Pre-load models while mic connects."""
+            try:
+                httpx.post(
+                    f"{self._server_url}/api/models/transcription/load", timeout=120
+                )
+                httpx.post(
+                    f"{self._server_url}/api/models/postprocess/load", timeout=120
+                )
+            except Exception:
+                pass  # Non-critical; models load on first transcribe anyway
+
         def _wait_for_mic():
             import subprocess
             import time
+
+            # Start model warm-up in parallel
+            warm_thread = threading.Thread(target=_warm_models, daemon=True)
+            warm_thread.start()
 
             deadline = time.monotonic() + 5.0
             while self.recorder.is_recording and not self.recorder.mic_ready:
@@ -173,6 +189,11 @@ class Daemon:
                     return
                 time.sleep(0.05)
             if self.recorder.is_recording:
+                # If models are still loading, show warming state
+                if warm_thread.is_alive():
+                    self.overlay.show_warming()
+                    print("   🔥 Warming up models...")
+                    warm_thread.join()
                 self.menubar.set_state(State.LISTENING)
                 mic = self.recorder.device_name or "unknown"
                 print(f"   🎤 Listening ({mic})...")
