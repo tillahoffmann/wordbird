@@ -174,7 +174,8 @@ class Daemon:
                 time.sleep(0.05)
             if self.recorder.is_recording:
                 self.menubar.set_state(State.LISTENING)
-                print("   🎤 Listening...")
+                mic = self.recorder.device_name or "unknown"
+                print(f"   🎤 Listening ({mic})...")
                 if self._sound:
                     subprocess.Popen(
                         ["afplay", _BONG_PATH],
