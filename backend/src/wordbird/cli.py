@@ -304,7 +304,9 @@ def server_main():
     """Entry point for `wordbird-server`."""
     import uvicorn
 
-    uvicorn.run("wordbird.server.server:app", host=DEFAULT_HOST, port=DEFAULT_PORT)
+    uvicorn.run(
+        "wordbird.server.server:app", host=DEFAULT_HOST, port=DEFAULT_PORT, factory=True
+    )
 
 
 def daemon_main():

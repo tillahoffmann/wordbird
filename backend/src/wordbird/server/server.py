@@ -130,7 +130,7 @@ def create_app() -> FastAPI:
             if mp_lock is not None:
                 cls.mp_lock = None
                 lock_inst = tqdm.tqdm.get_lock()
-                lock_inst.locks = [l for l in lock_inst.locks if l is not mp_lock]
+                lock_inst.locks = [lk for lk in lock_inst.locks if lk is not mp_lock]
                 del mp_lock
                 gc.collect()
         except Exception:
@@ -350,8 +350,10 @@ def create_app() -> FastAPI:
     return app
 
 
-# ASGI app for `uvicorn wordbird.server.server:app`
-app = create_app()
+# ASGI app factory for `uvicorn wordbird.server.server:app --factory`
+# Not created at import time to avoid spinning up a ThreadPoolExecutor
+# when the module is merely imported (e.g., during tests).
+app = create_app
 
 
 def _find_available_port(host: str, start_port: int, max_attempts: int = 10) -> int:
@@ -392,6 +394,7 @@ def start_server(wait: bool = True, timeout: float = 120) -> tuple:
             "-m",
             "uvicorn",
             "wordbird.server.server:app",
+            "--factory",
             "--host",
             host,
             "--port",

@@ -7,7 +7,7 @@ backend-build:
 	cd backend && uv build
 
 backend-dev:
-	cd backend && uv run uvicorn wordbird.server.server:app --reload --host 127.0.0.1 --port 7870
+	cd backend && uv run uvicorn wordbird.server.server:app --factory --reload --host 127.0.0.1 --port 7870
 
 # Run just the daemon (expects server running separately)
 daemon-dev:
@@ -41,7 +41,7 @@ dev:
 	echo "Starting backend on http://127.0.0.1:7870"; \
 	echo "Starting frontend on http://localhost:5173"; \
 	echo "Starting daemon..."; \
-	(cd backend && uv run uvicorn wordbird.server.server:app --reload --host 127.0.0.1 --port 7870) & \
+	(cd backend && uv run uvicorn wordbird.server.server:app --factory --reload --host 127.0.0.1 --port 7870) & \
 	(cd frontend && npm run dev) & \
 	sleep 3 && (cd backend && uv run wordbird-daemon) & \
 	wait'
