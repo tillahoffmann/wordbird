@@ -118,6 +118,23 @@ def create_app() -> FastAPI:
             get_reusable_executor().shutdown(wait=False, kill_workers=True)
         except Exception:
             pass
+        # Clean up tqdm's multiprocessing semaphore. tqdm creates a class-level
+        # RLock with a POSIX semaphore that is never released. Remove all
+        # references so Python's finalizer can unlink it before the resource
+        # tracker complains.
+        try:
+            import tqdm.std
+
+            cls = tqdm.std.TqdmDefaultWriteLock
+            mp_lock = getattr(cls, "mp_lock", None)
+            if mp_lock is not None:
+                cls.mp_lock = None
+                lock_inst = tqdm.tqdm.get_lock()
+                lock_inst.locks = [l for l in lock_inst.locks if l is not mp_lock]
+                del mp_lock
+                gc.collect()
+        except Exception:
+            pass
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
