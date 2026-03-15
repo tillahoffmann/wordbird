@@ -98,8 +98,15 @@ def create_app() -> FastAPI:
             _ml_state["postprocessor"] = PostProcessor()
         return _ml_state["postprocessor"]
 
+    _cleaned_up = False
+
     def _cleanup():
         """Release ML models and worker pools."""
+        nonlocal _cleaned_up
+        if _cleaned_up:
+            return
+        _cleaned_up = True
+
         import gc
 
         _ml_executor.shutdown(wait=False)
@@ -140,7 +147,6 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         import atexit
-        import signal
 
         # Preload models on startup
         print("🦜 Preloading ML models...")
@@ -152,14 +158,8 @@ def create_app() -> FastAPI:
             pp.load()
         print("🦜 Models ready.")
 
-        # Handle SIGTERM (sent by uvicorn --reload on shutdown).
-        # Without this, the process is killed before atexit/finalizers
-        # can clean up POSIX semaphores.
-        def _handle_term(signum, frame):
-            _cleanup()
-            sys.exit(0)
-
-        signal.signal(signal.SIGTERM, _handle_term)
+        # atexit handles cleanup when process is killed before lifespan
+        # shutdown runs (e.g., uvicorn --reload sending SIGTERM).
         atexit.register(_cleanup)
 
         yield

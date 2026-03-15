@@ -36,7 +36,7 @@ wordbird: frontend-bundle
 # Uses a wrapper script so Ctrl+C cleanly kills all children
 dev:
 	@bash -c '\
-	cleanup() { kill 0 2>/dev/null; wait 2>/dev/null; exit 0; }; \
+	cleanup() { kill -INT 0 2>/dev/null; sleep 1; kill -9 0 2>/dev/null; exit 0; }; \
 	trap cleanup INT TERM; \
 	echo "Starting backend on http://127.0.0.1:7870"; \
 	echo "Starting frontend on http://localhost:5173"; \
