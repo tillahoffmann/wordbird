@@ -1,6 +1,11 @@
 """FastAPI server for wordbird — API + ML inference + static frontend."""
 
+import os
 import webbrowser
+
+# Disable huggingface_hub progress bars to avoid tqdm creating
+# multiprocessing semaphores that leak on abrupt shutdown.
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -94,10 +99,10 @@ def create_app() -> FastAPI:
 
     def _cleanup():
         """Release ML models and worker pools."""
+        import gc
+
         _ml_executor.shutdown(wait=False)
         try:
-            import gc
-
             import mlx.core as mx
 
             mx.synchronize()
@@ -111,6 +116,22 @@ def create_app() -> FastAPI:
             from joblib.externals.loky import get_reusable_executor
 
             get_reusable_executor().shutdown(wait=False, kill_workers=True)
+        except Exception:
+            pass
+        # Clean up tqdm's multiprocessing semaphore (created by huggingface_hub
+        # downloads). Remove all references so Python's finalizer can unlink
+        # the POSIX semaphore before the resource tracker complains.
+        try:
+            import tqdm.std
+
+            cls = tqdm.std.TqdmDefaultWriteLock
+            mp_lock = getattr(cls, "mp_lock", None)
+            if mp_lock is not None:
+                cls.mp_lock = None
+                lock_inst = tqdm.tqdm.get_lock()
+                lock_inst.locks = [l for l in lock_inst.locks if l is not mp_lock]
+                del mp_lock
+                gc.collect()
         except Exception:
             pass
 
