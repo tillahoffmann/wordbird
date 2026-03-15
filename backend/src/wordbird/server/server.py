@@ -13,9 +13,11 @@ from wordbird.config import (
     DEFAULT_HOST,
     DEFAULT_PORT,
     DEFAULTS,
+    FIX_MODEL_SUGGESTIONS,
     KEY_LABELS,
     MODIFIER_KEY_OPTIONS,
     TOGGLE_KEY_OPTIONS,
+    TRANSCRIPTION_MODEL_SUGGESTIONS,
 )
 from wordbird.server.history import recent, stats
 from wordbird.server.history import record as record_transcription
@@ -100,6 +102,8 @@ def create_app() -> FastAPI:
             "modifier_key_options": MODIFIER_KEY_OPTIONS,
             "toggle_key_options": TOGGLE_KEY_OPTIONS,
             "key_labels": KEY_LABELS,
+            "transcription_model_suggestions": TRANSCRIPTION_MODEL_SUGGESTIONS,
+            "fix_model_suggestions": FIX_MODEL_SUGGESTIONS,
         }
 
     @app.put("/api/config")

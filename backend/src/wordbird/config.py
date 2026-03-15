@@ -65,6 +65,20 @@ KEY_LABELS = {
     "escape": "Escape",
 }
 
+TRANSCRIPTION_MODEL_SUGGESTIONS = [
+    "mlx-community/parakeet-tdt-0.6b-v2",
+    "mlx-community/parakeet-tdt-1.1b-v2",
+]
+
+FIX_MODEL_SUGGESTIONS = [
+    "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
+    "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+    "mlx-community/Qwen2.5-3B-Instruct-4bit",
+    "mlx-community/Qwen2.5-7B-Instruct-4bit",
+    "mlx-community/Llama-3.2-1B-Instruct-4bit",
+    "mlx-community/Llama-3.2-3B-Instruct-4bit",
+]
+
 DEFAULTS = {
     "modifier_key": "rcmd",
     "toggle_key": "space",

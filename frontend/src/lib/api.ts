@@ -27,6 +27,8 @@ export interface ConfigResponse {
   modifier_key_options: string[]
   toggle_key_options: string[]
   key_labels: Record<string, string>
+  transcription_model_suggestions: string[]
+  fix_model_suggestions: string[]
 }
 
 export async function fetchStats(): Promise<Stats> {
