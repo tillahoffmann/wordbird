@@ -1,21 +1,29 @@
 """Detect the focused app and resolve project context."""
 
+import glob
 import json
 import logging
 import os
 import subprocess
 
 import AppKit
+import Quartz
 
 from wordbird.config import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
 VSCODE_CONTEXT_PATH = os.path.join(DATA_DIR, "vscode-context.json")
+EDITOR_CONTEXTS_DIR = os.path.join(DATA_DIR, "editor-contexts")
 
 _VSCODE_BUNDLE_IDS = {
     "com.microsoft.VSCode",
     "com.microsoft.VSCodeInsiders",
+}
+
+_ZED_BUNDLE_IDS = {
+    "dev.zed.Zed",
+    "dev.zed.Zed-Preview",
 }
 
 
@@ -120,6 +128,89 @@ def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
         return None, None
 
 
+def _get_frontmost_window_title(pid: int) -> str | None:
+    """Get the title of the frontmost window owned by *pid*."""
+    try:
+        windows = Quartz.CGWindowListCopyWindowInfo(
+            Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID
+        )
+        for win in windows:
+            if (
+                win.get("kCGWindowOwnerPID") == pid
+                and win.get("kCGWindowLayer", -1) == 0
+            ):
+                title = win.get("kCGWindowName")
+                if title:
+                    return title
+    except Exception:
+        logger.debug("Failed to get window title for pid %d", pid, exc_info=True)
+    return None
+
+
+def _read_editor_context(frontmost_pid: int) -> tuple[str | None, str | None]:
+    """Scan editor-contexts/ and return context matching the frontmost window."""
+    pattern = os.path.join(EDITOR_CONTEXTS_DIR, "*.json")
+    files = glob.glob(pattern)
+    if not files:
+        return None, None
+
+    # Collect valid (alive, child-of-frontmost) contexts with mtime.
+    candidates: list[tuple[float, str, str | None]] = []
+    stale: list[str] = []
+
+    for path in files:
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except Exception:
+            continue
+
+        ctx_pid = data.get("pid")
+        if ctx_pid is None:
+            continue
+
+        # Check if process is still alive.
+        try:
+            os.kill(ctx_pid, 0)
+        except (ProcessLookupError, OSError):
+            stale.append(path)
+            continue
+
+        if ctx_pid != frontmost_pid and not _is_child_of(ctx_pid, frontmost_pid):
+            continue
+
+        workspace = data.get("workspace")
+        wordbird_md = data.get("wordbird_md")
+        mtime = os.path.getmtime(path)
+        candidates.append((mtime, workspace, wordbird_md))
+
+    # Clean up stale files from dead processes.
+    for path in stale:
+        try:
+            os.unlink(path)
+        except Exception:
+            pass
+
+    if not candidates:
+        return None, None
+
+    if len(candidates) == 1:
+        _, workspace, wordbird_md = candidates[0]
+        return workspace, wordbird_md
+
+    # Multiple candidates — match against window title.
+    title = _get_frontmost_window_title(frontmost_pid)
+    if title:
+        for mtime, workspace, wordbird_md in candidates:
+            if workspace and os.path.basename(workspace) in title:
+                return workspace, wordbird_md
+
+    # Fallback: most recently modified context file.
+    candidates.sort(reverse=True)  # newest first by mtime
+    _, workspace, wordbird_md = candidates[0]
+    return workspace, wordbird_md
+
+
 def find_context_file(start_dir: str) -> str | None:
     """Walk up from start_dir looking for a WORDBIRD.md file."""
     current = os.path.abspath(start_dir)
@@ -156,5 +247,10 @@ def get_context() -> tuple[str, str | None, str | None]:
         ws = AppKit.NSWorkspace.sharedWorkspace()
         frontmost_pid = ws.frontmostApplication().processIdentifier()
         cwd, context_content = _read_active_context(frontmost_pid)
+
+    elif bundle_id in _ZED_BUNDLE_IDS:
+        ws = AppKit.NSWorkspace.sharedWorkspace()
+        frontmost_pid = ws.frontmostApplication().processIdentifier()
+        cwd, context_content = _read_editor_context(frontmost_pid)
 
     return app_name, cwd, context_content
