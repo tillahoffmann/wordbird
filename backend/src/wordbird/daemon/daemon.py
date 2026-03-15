@@ -1,5 +1,6 @@
 """Daemon that handles hotkeys, recording, and UI — delegates transcription to the server."""
 
+import os
 import signal
 import threading
 
@@ -8,6 +9,7 @@ import Foundation
 import httpx
 import Quartz
 
+from wordbird.config import CONFIG_PATH, KEY_LABELS
 from wordbird.daemon.menubar import MenuBar, State
 from wordbird.daemon.overlay import Overlay
 from wordbird.daemon.recorder import Recorder
@@ -39,21 +41,6 @@ MODIFIER_FLAGS = {
     "lshift": Quartz.kCGEventFlagMaskShift,
     "rctrl": Quartz.kCGEventFlagMaskControl,
     "lctrl": Quartz.kCGEventFlagMaskControl,
-}
-
-KEY_LABELS = {
-    "rcmd": "Right ⌘",
-    "lcmd": "Left ⌘",
-    "ralt": "Right ⌥",
-    "lalt": "Left ⌥",
-    "rshift": "Right ⇧",
-    "lshift": "Left ⇧",
-    "rctrl": "Right ⌃",
-    "lctrl": "Left ⌃",
-    "space": "Space",
-    "return": "Return",
-    "tab": "Tab",
-    "escape": "Escape",
 }
 
 # How often to check if the event tap is still enabled (seconds)
@@ -97,6 +84,29 @@ class Daemon:
         self._cancelled = False
         self._tap = None
         self._server_proc = None
+        self._config_mtime: float = 0.0
+        self._update_config_mtime()
+
+    def _update_config_mtime(self):
+        """Record the current mtime of the config file."""
+        try:
+            self._config_mtime = os.path.getmtime(CONFIG_PATH)
+        except FileNotFoundError:
+            self._config_mtime = 0.0
+
+    def _check_config_changed(self):
+        """Reload config if the file has been modified."""
+        try:
+            mtime = os.path.getmtime(CONFIG_PATH)
+        except FileNotFoundError:
+            return
+        if mtime != self._config_mtime:
+            self._config_mtime = mtime
+            from wordbird.config import DEFAULTS, load_config
+
+            cfg = dict(DEFAULTS)
+            cfg.update(load_config())
+            self.apply_config(cfg)
 
     def apply_config(self, cfg: dict):
         """Apply configuration changes live."""
@@ -355,11 +365,15 @@ class Daemon:
         )
         Quartz.CGEventTapEnable(self._tap, True)
 
-        # Periodically check the event tap is still enabled
+        # Periodic maintenance: check event tap + config file changes
+        def _periodic_check():
+            self._check_tap_enabled_(None)
+            self._check_config_changed()
+
         Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             _TAP_CHECK_INTERVAL, self.menubar, "checkTapEnabled:", None, True
         )
-        self.menubar._tap_check_callback = lambda: self._check_tap_enabled_(None)
+        self.menubar._tap_check_callback = _periodic_check
 
         def _handle_shutdown(signum, frame):
             signame = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"

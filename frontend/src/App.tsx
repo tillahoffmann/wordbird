@@ -18,7 +18,12 @@ function App() {
   useEffect(() => {
     refresh()
     const interval = setInterval(refresh, 5000)
-    return () => clearInterval(interval)
+    const onFocus = () => refresh()
+    window.addEventListener("focus", onFocus)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("focus", onFocus)
+    }
   }, [])
 
   return (

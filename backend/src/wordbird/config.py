@@ -26,6 +26,33 @@ DB_PATH = os.path.join(CONFIG_DIR, "wordbird.db")
 PIDFILE = os.path.join(CONFIG_DIR, "wordbird.pid")
 LOG_PATH = os.path.join(CONFIG_DIR, "wordbird.log")
 
+MODIFIER_KEY_OPTIONS = [
+    "rcmd",
+    "lcmd",
+    "ralt",
+    "lalt",
+    "rshift",
+    "lshift",
+    "rctrl",
+    "lctrl",
+]
+TOGGLE_KEY_OPTIONS = ["space", "return", "tab", "escape"]
+
+KEY_LABELS = {
+    "rcmd": "Right ⌘",
+    "lcmd": "Left ⌘",
+    "ralt": "Right ⌥",
+    "lalt": "Left ⌥",
+    "rshift": "Right ⇧",
+    "lshift": "Left ⇧",
+    "rctrl": "Right ⌃",
+    "lctrl": "Left ⌃",
+    "space": "Space",
+    "return": "Return",
+    "tab": "Tab",
+    "escape": "Escape",
+}
+
 DEFAULTS = {
     "modifier_key": "rcmd",
     "toggle_key": "space",

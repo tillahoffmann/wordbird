@@ -270,13 +270,6 @@ class Overlay(Foundation.NSObject):
         self._icon_view.setAlphaValue_(alpha)
         self._tick += 1
 
-    @objc.python_method
-    def show_recording(self):
-        """Show the recording state. Call from any thread."""
-        self.performSelectorOnMainThread_withObject_waitUntilDone_(
-            "doShowRecording:", None, False
-        )
-
     def doShowRecording_(self, _):
         self._stop_timer()
         self._icon_view.setAlphaValue_(1.0)

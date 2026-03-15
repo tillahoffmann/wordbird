@@ -9,39 +9,17 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import wordbird.config as bw_config
-from wordbird.config import DEFAULTS
+from wordbird.config import (
+    DEFAULTS,
+    KEY_LABELS,
+    MODIFIER_KEY_OPTIONS,
+    TOGGLE_KEY_OPTIONS,
+)
 from wordbird.server.history import recent, stats
 from wordbird.server.history import record as record_transcription
 
 PORT = 7870
 HOST = "127.0.0.1"
-
-MODIFIER_KEY_OPTIONS = [
-    "rcmd",
-    "lcmd",
-    "ralt",
-    "lalt",
-    "rshift",
-    "lshift",
-    "rctrl",
-    "lctrl",
-]
-TOGGLE_KEY_OPTIONS = ["space", "return", "tab", "escape"]
-
-KEY_LABELS = {
-    "rcmd": "Right ⌘",
-    "lcmd": "Left ⌘",
-    "ralt": "Right ⌥",
-    "lalt": "Left ⌥",
-    "rshift": "Right ⇧",
-    "lshift": "Left ⇧",
-    "rctrl": "Right ⌃",
-    "lctrl": "Left ⌃",
-    "space": "Space",
-    "return": "Return",
-    "tab": "Tab",
-    "escape": "Escape",
-}
 
 PACKAGE_DIR = os.path.dirname(__file__)
 
