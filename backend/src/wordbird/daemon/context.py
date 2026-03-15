@@ -1,12 +1,15 @@
 """Detect the focused app and resolve project context."""
 
 import json
+import logging
 import os
 import subprocess
 
 import AppKit
 
 from wordbird.config import CONFIG_DIR
+
+logger = logging.getLogger(__name__)
 
 ACTIVE_CONTEXT_PATH = os.path.join(CONFIG_DIR, "active-context.json")
 
@@ -24,11 +27,7 @@ def get_frontmost_app() -> tuple[str, str]:
 
 
 def get_terminal_cwd() -> str | None:
-    """Get the cwd of the shell in the frontmost Terminal.app tab.
-
-    Only called when Terminal.app is the focused app.
-    Requires Automation permission for Terminal.app (prompts once).
-    """
+    """Get the cwd of the shell in the frontmost Terminal.app tab."""
     try:
         tty = subprocess.run(
             [
@@ -78,7 +77,7 @@ def get_terminal_cwd() -> str | None:
                 return line[1:]
 
     except Exception:
-        pass
+        logger.debug("Failed to detect Terminal.app cwd", exc_info=True)
 
     return None
 
@@ -99,17 +98,12 @@ def _is_child_of(child_pid: int, parent_pid: int) -> bool:
             return False
         return _is_child_of(ppid, parent_pid)
     except Exception:
+        logger.debug("Failed to check process ancestry", exc_info=True)
         return False
 
 
 def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
-    """Read workspace and WORDBIRD.md from active-context.json.
-
-    Written by the VS Code extension. Verified by checking that the PID
-    in the file is a child process of the frontmost application.
-
-    Returns (workspace_path, wordbird_md_content).
-    """
+    """Read workspace and WORDBIRD.md from active-context.json."""
     try:
         with open(ACTIVE_CONTEXT_PATH) as f:
             data = json.load(f)
@@ -119,7 +113,10 @@ def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
             return None, None
 
         return data.get("workspace"), data.get("wordbird_md")
+    except FileNotFoundError:
+        return None, None
     except Exception:
+        logger.debug("Failed to read active-context.json", exc_info=True)
         return None, None
 
 
@@ -138,12 +135,7 @@ def find_context_file(start_dir: str) -> str | None:
 
 
 def get_context() -> tuple[str, str | None, str | None]:
-    """Get current context: (app_name, cwd, WORDBIRD.md contents or None).
-
-    Resolves context from:
-    - Terminal.app: detects focused tab's shell cwd, walks up for WORDBIRD.md
-    - VS Code / Insiders: reads active-context.json written by the extension
-    """
+    """Get current context: (app_name, cwd, WORDBIRD.md contents or None)."""
     bundle_id, app_name = get_frontmost_app()
 
     cwd = None
@@ -158,7 +150,7 @@ def get_context() -> tuple[str, str | None, str | None]:
                     with open(context_file) as f:
                         context_content = f.read()
                 except Exception:
-                    pass
+                    logger.debug("Failed to read %s", context_file, exc_info=True)
 
     elif bundle_id in _VSCODE_BUNDLE_IDS:
         ws = AppKit.NSWorkspace.sharedWorkspace()

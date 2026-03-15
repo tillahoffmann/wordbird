@@ -17,9 +17,13 @@ from wordbird.config import (
 )
 from wordbird.server.server import HOST, PORT
 
+_SERVER_URL = f"http://{HOST}:{PORT}"
+
+
+# --- PID management ---
+
 
 def _read_pid() -> int | None:
-    """Read PID from pidfile, return None if stale or missing."""
     try:
         with open(PIDFILE) as f:
             pid = int(f.read().strip())
@@ -46,6 +50,9 @@ def _remove_pid():
         pass
 
 
+# --- Shared helpers ---
+
+
 def _check_permissions() -> bool:
     from wordbird.daemon.permissions import verify_permissions
 
@@ -58,17 +65,35 @@ def _check_permissions() -> bool:
 def _cli_overrides(args) -> dict:
     """Extract CLI overrides as a dict (only explicitly set values)."""
     result = {}
-    if args.model:
+    if getattr(args, "model", None):
         result["transcription_model"] = args.model
-    if args.fix_model:
+    if getattr(args, "fix_model", None):
         result["fix_model"] = args.fix_model
-    if args.no_fix:
+    if getattr(args, "no_fix", False):
         result["no_fix"] = True
-    if args.modifier_key != DEFAULTS["modifier_key"]:
+    if (
+        getattr(args, "modifier_key", DEFAULTS["modifier_key"])
+        != DEFAULTS["modifier_key"]
+    ):
         result["modifier_key"] = args.modifier_key
-    if args.toggle_key != DEFAULTS["toggle_key"]:
+    if getattr(args, "toggle_key", DEFAULTS["toggle_key"]) != DEFAULTS["toggle_key"]:
         result["toggle_key"] = args.toggle_key
     return result
+
+
+def _create_daemon(cfg: dict, server_url: str = _SERVER_URL):
+    """Create a Daemon from resolved config."""
+    from wordbird.daemon.daemon import Daemon
+
+    return Daemon(
+        modifier_key=cfg["modifier_key"],
+        toggle_key=cfg["toggle_key"],
+        server_url=server_url,
+        no_fix=cfg["no_fix"],
+    )
+
+
+# --- Commands ---
 
 
 def _run_foreground(args):
@@ -85,25 +110,17 @@ def _run_foreground(args):
     server_proc = None
     try:
         from wordbird.config import resolve
-        from wordbird.daemon.daemon import Daemon
 
-        cli = _cli_overrides(args)
-        cfg = resolve(cli)
-        server_url = f"http://{HOST}:{PORT}"
+        cfg = resolve(_cli_overrides(args))
+        server_url = _SERVER_URL
 
         if not args.no_server:
-            # Start server as sibling subprocess
             from wordbird.server.server import start_server
 
             server_proc, server_url = start_server()
             print(f"🦜 Server started on {server_url}")
 
-        daemon = Daemon(
-            modifier_key=cfg["modifier_key"],
-            toggle_key=cfg["toggle_key"],
-            server_url=server_url,
-            no_fix=cfg["no_fix"],
-        )
+        daemon = _create_daemon(cfg, server_url)
         daemon.run()
     finally:
         if server_proc is not None:
@@ -124,17 +141,19 @@ def _cmd_start(args):
 
     print("🦜 Starting wordbird in the background...")
 
+    # Build the command from CLI overrides
     cmd = [sys.executable, "-m", "wordbird"]
-    if args.model:
-        cmd += ["--model", args.model]
-    if args.fix_model:
-        cmd += ["--fix-model", args.fix_model]
-    if args.no_fix:
+    overrides = _cli_overrides(args)
+    if "transcription_model" in overrides:
+        cmd += ["--model", overrides["transcription_model"]]
+    if "fix_model" in overrides:
+        cmd += ["--fix-model", overrides["fix_model"]]
+    if overrides.get("no_fix"):
         cmd.append("--no-fix")
-    if args.modifier_key != DEFAULTS["modifier_key"]:
-        cmd += ["--modifier-key", args.modifier_key]
-    if args.toggle_key != DEFAULTS["toggle_key"]:
-        cmd += ["--toggle-key", args.toggle_key]
+    if "modifier_key" in overrides:
+        cmd += ["--modifier-key", overrides["modifier_key"]]
+    if "toggle_key" in overrides:
+        cmd += ["--toggle-key", overrides["toggle_key"]]
 
     ensure_config_dir()
     log_file = open(LOG_PATH, "a")
@@ -197,7 +216,6 @@ def _cmd_init(args):
 
 
 def _cmd_config(args):
-    """Show or create the config file."""
     if not os.path.exists(CONFIG_PATH):
         ensure_config_dir()
         with open(CONFIG_PATH, "w") as f:
@@ -232,24 +250,17 @@ def _cmd_history(args):
         print(f"   [{ts}] ({app}) {text[:100]}{'...' if len(text) > 100 else ''}")
 
 
+# --- Entry points ---
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Voice dictation using Parakeet on Apple Silicon"
     )
+    parser.add_argument("--model", default=None, help="Transcription model")
+    parser.add_argument("--fix-model", default=None, help="Post-processor model")
     parser.add_argument(
-        "--model",
-        default=None,
-        help="Transcription model",
-    )
-    parser.add_argument(
-        "--fix-model",
-        default=None,
-        help="Post-processor model",
-    )
-    parser.add_argument(
-        "--no-fix",
-        action="store_true",
-        help="Disable LLM post-processing",
+        "--no-fix", action="store_true", help="Disable LLM post-processing"
     )
     parser.add_argument(
         "--no-server",
@@ -276,55 +287,43 @@ def main():
 
     history_parser = sub.add_parser("history", help="Show transcription history")
     history_parser.add_argument(
-        "-n",
-        "--limit",
-        type=int,
-        default=20,
-        help="Number of entries to show (default: 20)",
+        "-n", "--limit", type=int, default=20, help="Number of entries (default: 20)"
     )
 
     args = parser.parse_args()
 
-    if args.command == "init":
-        _cmd_init(args)
-    elif args.command == "start":
-        _cmd_start(args)
-    elif args.command == "stop":
-        _cmd_stop(args)
-    elif args.command == "status":
-        _cmd_status(args)
-    elif args.command == "config":
-        _cmd_config(args)
-    elif args.command == "history":
-        _cmd_history(args)
+    commands = {
+        "init": _cmd_init,
+        "start": _cmd_start,
+        "stop": _cmd_stop,
+        "status": _cmd_status,
+        "config": _cmd_config,
+        "history": _cmd_history,
+    }
+
+    handler = commands.get(args.command)
+    if handler:
+        handler(args)
     else:
         _run_foreground(args)
 
 
 def server_main():
-    """Entry point for `wordbird-server` — runs just the API server."""
+    """Entry point for `wordbird-server`."""
     import uvicorn
-
-    from wordbird.server.server import HOST, PORT
 
     uvicorn.run("wordbird.server.server:app", host=HOST, port=PORT)
 
 
 def daemon_main():
-    """Entry point for `wordbird-daemon` — runs just the daemon (no server)."""
+    """Entry point for `wordbird-daemon`."""
     if not _check_permissions():
         sys.exit(1)
 
     from wordbird.config import resolve
-    from wordbird.daemon.daemon import Daemon
 
     cfg = resolve({})
-    daemon = Daemon(
-        modifier_key=cfg["modifier_key"],
-        toggle_key=cfg["toggle_key"],
-        server_url=f"http://{HOST}:{PORT}",
-        no_fix=cfg["no_fix"],
-    )
+    daemon = _create_daemon(cfg)
     daemon.run()
 
 

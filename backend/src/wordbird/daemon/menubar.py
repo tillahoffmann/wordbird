@@ -21,7 +21,6 @@ def _rgb(r, g, b):
     )
 
 
-# Parrot icon for idle/connecting/listening; sparkles for transcribing
 _ICON_SVG = os.path.join(os.path.dirname(__file__), "icon.svg")
 
 _STATE_LABELS = {
@@ -31,29 +30,27 @@ _STATE_LABELS = {
     State.TRANSCRIBING: "Transcribing…",
 }
 
+_BARS = " ▁▂▃▄▅▆▇"
+_SPINNER = "◐◓◑◒"
 
-def _load_parrot_icon(color: AppKit.NSColor | None = None, size: float = 18.0):
-    """Load the parrot SVG icon for the menu bar.
 
-    If color is None, returns a template image (adapts to menu bar theme).
-    If color is set, tints the solid parts to that color.
-    """
+def _load_parrot_icon(color=None, size=18.0):
+    """Load the parrot SVG icon, optionally tinted."""
     base = AppKit.NSImage.alloc().initWithContentsOfFile_(_ICON_SVG)
     if base is None:
         return None
 
-    target_size = AppKit.NSMakeSize(size, size)
-    result = AppKit.NSImage.alloc().initWithSize_(target_size)
+    target = AppKit.NSMakeSize(size, size)
+    result = AppKit.NSImage.alloc().initWithSize_(target)
     result.lockFocus()
 
-    src_size = base.size()
+    src = base.size()
     base.drawInRect_fromRect_operation_fraction_(
         AppKit.NSMakeRect(0, 0, size, size),
-        AppKit.NSMakeRect(0, 0, src_size.width, src_size.height),
+        AppKit.NSMakeRect(0, 0, src.width, src.height),
         AppKit.NSCompositeSourceOver,
         1.0,
     )
-
     if color is not None:
         color.set()
         AppKit.NSRectFillUsingOperation(
@@ -66,7 +63,7 @@ def _load_parrot_icon(color: AppKit.NSColor | None = None, size: float = 18.0):
     return result
 
 
-def _tinted_sf_symbol(name: str, color: AppKit.NSColor, size: float = 16.0):
+def _tinted_sf_symbol(name, color, size=16.0):
     """Load an SF Symbol tinted to the given color."""
     base = AppKit.NSImage.imageWithSystemSymbolName_accessibilityDescription_(
         name, None
@@ -74,27 +71,20 @@ def _tinted_sf_symbol(name: str, color: AppKit.NSColor, size: float = 16.0):
     if base is None:
         return None
 
-    config = AppKit.NSImageSymbolConfiguration.configurationWithPointSize_weight_(
+    cfg = AppKit.NSImageSymbolConfiguration.configurationWithPointSize_weight_(
         size, AppKit.NSFontWeightRegular
     )
-    sized = base.imageWithSymbolConfiguration_(config)
-    if sized is None:
-        sized = base
+    sized = base.imageWithSymbolConfiguration_(cfg) or base
 
-    target_size = sized.size()
-    result = AppKit.NSImage.alloc().initWithSize_(target_size)
+    sz = sized.size()
+    result = AppKit.NSImage.alloc().initWithSize_(sz)
     result.lockFocus()
-
     color.set()
-    rect = AppKit.NSMakeRect(0, 0, target_size.width, target_size.height)
+    rect = AppKit.NSMakeRect(0, 0, sz.width, sz.height)
     sized.drawInRect_fromRect_operation_fraction_(
-        rect,
-        rect,
-        AppKit.NSCompositeSourceOver,
-        1.0,
+        rect, rect, AppKit.NSCompositeSourceOver, 1.0
     )
     AppKit.NSRectFillUsingOperation(rect, AppKit.NSCompositeSourceAtop)
-
     result.unlockFocus()
     result.setTemplate_(False)
     return result
@@ -103,36 +93,37 @@ def _tinted_sf_symbol(name: str, color: AppKit.NSColor, size: float = 16.0):
 class MenuBar(AppKit.NSObject):
     """Manages a menu bar status item that reflects recording state."""
 
-    _BARS = " ▁▂▃▄▅▆▇"
-    _SPINNER = "◐◓◑◒"
-
     def init(self):
         self = objc.super(MenuBar, self).init()
         if self is None:
             return None
         self._on_quit = None
-        self._level_callback = None  # callable returning float 0-1
-        self._mic_ready_callback = None  # callable returning bool
+        self._level_callback = None
+        self._mic_ready_callback = None
         self._level_timer = None
         self._spinner_idx = 0
         self._state = State.IDLE
         self._status_item = None
         self._menu = None
+        self._periodic_callbacks: list = []
         return self
 
     @objc.python_method
-    def set_on_quit(self, callback):
-        self._on_quit = callback
+    def set_on_quit(self, cb):
+        self._on_quit = cb
 
     @objc.python_method
-    def set_level_callback(self, callback):
-        """Set a callable that returns the current audio level (0.0-1.0)."""
-        self._level_callback = callback
+    def set_level_callback(self, cb):
+        self._level_callback = cb
 
     @objc.python_method
-    def set_mic_ready_callback(self, callback):
-        """Set a callable that returns whether the mic has produced audio."""
-        self._mic_ready_callback = callback
+    def set_mic_ready_callback(self, cb):
+        self._mic_ready_callback = cb
+
+    @objc.python_method
+    def add_periodic_callback(self, cb):
+        """Register a callback to run on every periodic timer tick."""
+        self._periodic_callbacks.append(cb)
 
     @objc.python_method
     def setup(self):
@@ -174,7 +165,6 @@ class MenuBar(AppKit.NSObject):
         self._menu.addItem_(quit_item)
 
         self._status_item.setMenu_(self._menu)
-
         self._apply_state(State.IDLE)
 
     @objc.python_method
@@ -186,33 +176,24 @@ class MenuBar(AppKit.NSObject):
         )
 
     def applyState_(self, state_number):
-        """ObjC-callable method to apply state on the main thread."""
         state = State(state_number.intValue())
         self._apply_state(state)
 
     @objc.python_method
     def _apply_state(self, state: State):
-        """Actually update the UI. Must be called on the main thread."""
-        label = _STATE_LABELS[state]
         button = self._status_item.button()
 
-        if state == State.TRANSCRIBING:
-            image = _tinted_sf_symbol("sparkles", _rgb(255, 204, 0))
-        elif state == State.IDLE:
-            image = _load_parrot_icon()
-        elif state == State.CONNECTING:
-            image = _load_parrot_icon(color=_rgb(255, 204, 0))
-        elif state == State.LISTENING:
-            image = _load_parrot_icon(color=_rgb(255, 56, 60))
-        else:
-            image = None
+        icons = {
+            State.IDLE: lambda: _load_parrot_icon(),
+            State.CONNECTING: lambda: _load_parrot_icon(color=_rgb(255, 204, 0)),
+            State.LISTENING: lambda: _load_parrot_icon(color=_rgb(255, 56, 60)),
+            State.TRANSCRIBING: lambda: _tinted_sf_symbol(
+                "sparkles", _rgb(255, 204, 0)
+            ),
+        }
+        image = icons.get(state, lambda: None)()
+        button.setImage_(image)
 
-        if image is not None:
-            button.setImage_(image)
-        else:
-            button.setImage_(None)
-
-        # Start/stop the level meter timer
         if state in (State.LISTENING, State.CONNECTING):
             self._spinner_idx = 0
             self._start_level_timer()
@@ -222,11 +203,10 @@ class MenuBar(AppKit.NSObject):
 
         state_item = self._menu.itemWithTag_(100)
         if state_item is not None:
-            state_item.setTitle_(label)
+            state_item.setTitle_(_STATE_LABELS[state])
 
     @objc.python_method
     def _start_level_timer(self):
-        """Start polling audio level to update the menu bar meter."""
         if self._level_timer is not None:
             return
         self._level_timer = Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
@@ -235,13 +215,11 @@ class MenuBar(AppKit.NSObject):
 
     @objc.python_method
     def _stop_level_timer(self):
-        """Stop the level meter timer."""
         if self._level_timer is not None:
             self._level_timer.invalidate()
             self._level_timer = None
 
     def updateLevel_(self, timer):
-        """Called by NSTimer to update the audio level or spinner display."""
         if self._state not in (State.LISTENING, State.CONNECTING):
             return
 
@@ -249,23 +227,21 @@ class MenuBar(AppKit.NSObject):
         mic_ready = self._mic_ready_callback() if self._mic_ready_callback else True
 
         if not mic_ready:
-            # Show yellow bird with spinner while mic is connecting
             image = _load_parrot_icon(color=_rgb(255, 204, 0))
             if image:
                 button.setImage_(image)
-            char = self._SPINNER[self._spinner_idx % len(self._SPINNER)]
+            char = _SPINNER[self._spinner_idx % len(_SPINNER)]
             self._spinner_idx += 1
             color = _rgb(255, 204, 0)
         else:
-            # Show red bird with level meter
             if self._state != State.LISTENING:
                 self._apply_state(State.LISTENING)
             image = _load_parrot_icon(color=_rgb(255, 56, 60))
             if image:
                 button.setImage_(image)
             level = self._level_callback() if self._level_callback else 0
-            idx = int(level * (len(self._BARS) - 1))
-            char = self._BARS[min(idx, len(self._BARS) - 1)]
+            idx = min(int(level * (len(_BARS) - 1)), len(_BARS) - 1)
+            char = _BARS[idx]
             color = _rgb(255, 56, 60)
 
         attr_str = AppKit.NSAttributedString.alloc().initWithString_attributes_(
@@ -279,18 +255,12 @@ class MenuBar(AppKit.NSObject):
         )
         button.setAttributedTitle_(attr_str)
 
-    def reinstallSignalHandler_(self, timer):
-        """Called by NSTimer to re-register SIGINT after app.run() starts."""
-        if hasattr(self, "_sigint_callback") and self._sigint_callback:
-            self._sigint_callback()
-
-    def checkTapEnabled_(self, timer):
-        """Called by NSTimer to periodically check the event tap."""
-        if hasattr(self, "_tap_check_callback") and self._tap_check_callback:
-            self._tap_check_callback()
+    def periodicTick_(self, timer):
+        """Generic periodic timer callback — runs all registered callbacks."""
+        for cb in self._periodic_callbacks:
+            cb()
 
     def copyLast_(self, sender):
-        """Copy the last transcription to the clipboard."""
         from wordbird.server.history import recent
 
         rows = recent(limit=1)
@@ -301,13 +271,11 @@ class MenuBar(AppKit.NSObject):
             pb.setString_forType_(text, AppKit.NSPasteboardTypeString)
 
     def openDashboard_(self, sender):
-        """Open the web dashboard in the browser."""
         from wordbird.server.server import open_dashboard
 
         open_dashboard()
 
     def quit_(self, sender):
-        """Handle quit menu item."""
         if self._on_quit:
             self._on_quit()
         AppKit.NSApplication.sharedApplication().terminate_(None)

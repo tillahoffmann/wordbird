@@ -7,6 +7,7 @@ import threading
 import AppKit
 import Foundation
 import httpx
+import objc
 import Quartz
 
 from wordbird.config import CONFIG_PATH, KEY_LABELS
@@ -319,8 +320,9 @@ class Daemon:
 
         return event
 
-    def _check_tap_enabled_(self, timer):
-        """NSTimer callback — periodically checks the event tap is still alive."""
+    @objc.python_method
+    def _check_tap_enabled(self):
+        """Re-enable the event tap if macOS disabled it."""
         if self._tap is not None and not Quartz.CGEventTapIsEnabled(self._tap):
             print("   ⚠️  Event tap was disabled, re-enabling...")
             Quartz.CGEventTapEnable(self._tap, True)
@@ -365,16 +367,6 @@ class Daemon:
         )
         Quartz.CGEventTapEnable(self._tap, True)
 
-        # Periodic maintenance: check event tap + config file changes
-        def _periodic_check():
-            self._check_tap_enabled_(None)
-            self._check_config_changed()
-
-        Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            _TAP_CHECK_INTERVAL, self.menubar, "checkTapEnabled:", None, True
-        )
-        self.menubar._tap_check_callback = _periodic_check
-
         def _handle_shutdown(signum, frame):
             signame = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
             print(f"\n🦜 Received {signame}, shutting down.")
@@ -384,14 +376,15 @@ class Daemon:
         signal.signal(signal.SIGTERM, _handle_shutdown)
         signal.signal(signal.SIGINT, _handle_shutdown)
 
-        # NSApplication.run() overrides SIGINT on start. Use a repeating
-        # timer to reinstall our handler — more robust than a one-shot.
-        def _reinstall_sigint():
-            signal.signal(signal.SIGINT, _handle_shutdown)
-
-        self.menubar._sigint_callback = _reinstall_sigint
+        # Register periodic callbacks on a single timer.
+        # SIGINT reinstall is needed because NSApplication.run() overrides it.
+        self.menubar.add_periodic_callback(
+            lambda: signal.signal(signal.SIGINT, _handle_shutdown)
+        )
+        self.menubar.add_periodic_callback(self._check_tap_enabled)
+        self.menubar.add_periodic_callback(self._check_config_changed)
         Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            0.5, self.menubar, "reinstallSignalHandler:", None, True
+            _TAP_CHECK_INTERVAL, self.menubar, "periodicTick:", None, True
         )
 
         app.run()
