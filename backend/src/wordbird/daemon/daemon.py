@@ -67,6 +67,10 @@ class Daemon:
         self.recorder = Recorder()
         self._server_url = server_url
         self._submit_after = False
+        self._stt_warm = threading.Event()
+        self._stt_warm.set()  # Assume loaded until proven otherwise
+        self._fix_warm = threading.Event()
+        self._fix_warm.set()
 
         # Set defaults before apply_config overwrites them
         self._modifier_keycode = KEYCODES["rcmd"]
@@ -159,25 +163,34 @@ class Daemon:
         print("   🔌 Connecting mic...")
         self.recorder.start()
 
-        def _warm_models():
-            """Pre-load models while mic connects."""
+        # Fire off model warm-up in background — runs while user records
+        self._stt_warm = threading.Event()
+        self._fix_warm = threading.Event()
+
+        def _warm_stt():
             try:
                 httpx.post(
                     f"{self._server_url}/api/models/transcription/load", timeout=120
                 )
+            except Exception:
+                pass
+            self._stt_warm.set()
+
+        def _warm_fix():
+            try:
                 httpx.post(
                     f"{self._server_url}/api/models/postprocess/load", timeout=120
                 )
             except Exception:
-                pass  # Non-critical; models load on first transcribe anyway
+                pass
+            self._fix_warm.set()
+
+        threading.Thread(target=_warm_stt, daemon=True).start()
+        threading.Thread(target=_warm_fix, daemon=True).start()
 
         def _wait_for_mic():
             import subprocess
             import time
-
-            # Start model warm-up in parallel
-            warm_thread = threading.Thread(target=_warm_models, daemon=True)
-            warm_thread.start()
 
             deadline = time.monotonic() + 5.0
             while self.recorder.is_recording and not self.recorder.mic_ready:
@@ -189,11 +202,6 @@ class Daemon:
                     return
                 time.sleep(0.05)
             if self.recorder.is_recording:
-                # If models are still loading, show warming state
-                if warm_thread.is_alive():
-                    self.overlay.show_warming()
-                    print("   🔥 Warming up models...")
-                    warm_thread.join()
                 self.menubar.set_state(State.LISTENING)
                 mic = self.recorder.device_name or "unknown"
                 print(f"   🎤 Listening ({mic})...")
@@ -224,7 +232,6 @@ class Daemon:
             return
 
         self.menubar.set_state(State.TRANSCRIBING)
-        self.overlay.show_transcribing()
         threading.Thread(
             target=self._transcribe_and_type,
             args=(wav_bytes, duration),
@@ -243,7 +250,14 @@ class Daemon:
             if self._cancelled:
                 return
 
+            # Wait for STT model if still warming up
+            if not self._stt_warm.is_set():
+                self.overlay.show_warming()
+                print("   🔥 Warming up transcription model...")
+                self._stt_warm.wait()
+
             # Step 1: Transcribe (speech-to-text)
+            self.overlay.show_transcribing()
             print("   ✨ Transcribing...")
             with httpx.Client(timeout=120) as client:
                 resp = client.post(
@@ -271,6 +285,12 @@ class Daemon:
             fixed_text = None
             fix_model = None
             if not self._no_fix:
+                # Wait for fix model if still warming up
+                if not self._fix_warm.is_set():
+                    self.overlay.show_warming()
+                    print("   🔥 Warming up post-processing model...")
+                    self._fix_warm.wait()
+
                 self.overlay.show_improving()
 
                 if self._cancelled:
