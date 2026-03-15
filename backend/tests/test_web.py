@@ -12,9 +12,9 @@ from wordbird.server.server import create_app
 
 @pytest.fixture(autouse=True)
 def use_temp_paths(tmp_path, monkeypatch):
-    monkeypatch.setattr("wordbird.config.DATA_DIR", str(tmp_path))
-    monkeypatch.setattr("wordbird.config.CONFIG_PATH", str(tmp_path / "wordbird.toml"))
-    monkeypatch.setattr("wordbird.server.history.DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setattr("wordbird.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("wordbird.config.CONFIG_PATH", tmp_path / "wordbird.toml")
+    monkeypatch.setattr("wordbird.server.history.DB_PATH", tmp_path / "test.db")
 
 
 @pytest.fixture

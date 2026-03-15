@@ -8,8 +8,8 @@ from wordbird.server import history
 @pytest.fixture(autouse=True)
 def use_temp_db(tmp_path, monkeypatch):
     """Point the database to a temp file."""
-    monkeypatch.setattr("wordbird.server.history.DB_PATH", str(tmp_path / "test.db"))
-    monkeypatch.setattr("wordbird.config.DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("wordbird.server.history.DB_PATH", tmp_path / "test.db")
+    monkeypatch.setattr("wordbird.config.DATA_DIR", tmp_path)
 
 
 class TestHistory:

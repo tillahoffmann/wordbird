@@ -1,8 +1,8 @@
 """Daemon that handles hotkeys, recording, and UI — delegates transcription to the server."""
 
-import os
 import signal
 import threading
+from pathlib import Path
 
 import AppKit
 import Foundation
@@ -46,8 +46,8 @@ MODIFIER_FLAGS = {
     "fn": Quartz.kCGEventFlagMaskSecondaryFn,
 }
 
-_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-_BONG_PATH = os.path.join(_STATIC_DIR, "bong.ogg")
+_STATIC_DIR = Path(__file__).parent / "static"
+_BONG_PATH = str(_STATIC_DIR / "bong.ogg")
 
 # How often to check if the event tap is still enabled (seconds)
 _TAP_CHECK_INTERVAL = 5.0
@@ -99,14 +99,14 @@ class Daemon:
     def _update_config_mtime(self):
         """Record the current mtime of the config file."""
         try:
-            self._config_mtime = os.path.getmtime(CONFIG_PATH)
+            self._config_mtime = CONFIG_PATH.stat().st_mtime
         except FileNotFoundError:
             self._config_mtime = 0.0
 
     def _check_config_changed(self):
         """Reload config if the file has been modified."""
         try:
-            mtime = os.path.getmtime(CONFIG_PATH)
+            mtime = CONFIG_PATH.stat().st_mtime
         except FileNotFoundError:
             return
         if mtime != self._config_mtime:

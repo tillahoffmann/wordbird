@@ -1,7 +1,7 @@
 """macOS menu bar icon with state indicators."""
 
-import os
 from enum import Enum, auto
+from pathlib import Path
 
 import AppKit
 import Foundation
@@ -21,7 +21,7 @@ def _rgb(r, g, b):
     )
 
 
-_ICON_SVG = os.path.join(os.path.dirname(__file__), "static", "icon.svg")
+_ICON_SVG = str(Path(__file__).parent / "static" / "icon.svg")
 
 _STATE_LABELS = {
     State.IDLE: "Idle",

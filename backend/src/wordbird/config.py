@@ -9,9 +9,9 @@ Priority (highest to lowest):
 
 import json
 import logging
-import os
 import shutil
 import sys
+from pathlib import Path
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -25,15 +25,15 @@ from wordbird.prompt import DEFAULT_FIX_MODEL, DEFAULT_TRANSCRIPTION_MODEL
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = os.path.expanduser("~/.wordbird")
-CONFIG_PATH = os.path.join(DATA_DIR, "wordbird.toml")
-DB_PATH = os.path.join(DATA_DIR, "wordbird.db")
-PIDFILE = os.path.join(DATA_DIR, "wordbird.pid")
-LOG_PATH = os.path.join(DATA_DIR, "wordbird.log")
-SERVER_JSON_PATH = os.path.join(DATA_DIR, "server.json")
+DATA_DIR = Path.home() / ".wordbird"
+CONFIG_PATH = DATA_DIR / "wordbird.toml"
+DB_PATH = DATA_DIR / "wordbird.db"
+PIDFILE = DATA_DIR / "wordbird.pid"
+LOG_PATH = DATA_DIR / "wordbird.log"
+SERVER_JSON_PATH = DATA_DIR / "server.json"
 
 # Legacy path for migration
-_LEGACY_DIR = os.path.expanduser("~/.config/wordbird")
+_LEGACY_DIR = Path.home() / ".config" / "wordbird"
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 7870
@@ -103,14 +103,14 @@ DEFAULT_CONFIG_TOML = """\
 
 def ensure_data_dir():
     """Create the data directory if it doesn't exist, migrating from legacy location."""
-    if not os.path.isdir(DATA_DIR):
-        os.makedirs(DATA_DIR, exist_ok=True)
+    if not DATA_DIR.is_dir():
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
         _migrate_legacy()
 
 
 def _migrate_legacy():
     """Migrate files from ~/.config/wordbird/ to ~/.wordbird/ if they exist."""
-    if not os.path.isdir(_LEGACY_DIR):
+    if not _LEGACY_DIR.is_dir():
         return
 
     migrations = {
@@ -118,9 +118,9 @@ def _migrate_legacy():
         "wordbird.db": "wordbird.db",
     }
     for old_name, new_name in migrations.items():
-        old_path = os.path.join(_LEGACY_DIR, old_name)
-        new_path = os.path.join(DATA_DIR, new_name)
-        if os.path.exists(old_path) and not os.path.exists(new_path):
+        old_path = _LEGACY_DIR / old_name
+        new_path = DATA_DIR / new_name
+        if old_path.exists() and not new_path.exists():
             shutil.copy2(old_path, new_path)
             logger.info("Migrated %s → %s", old_path, new_path)
 
@@ -131,7 +131,7 @@ def load_config() -> dict:
     Returns a dict with only the keys the user has set.
     """
     try:
-        with open(CONFIG_PATH, "rb") as f:
+        with CONFIG_PATH.open("rb") as f:
             return tomllib.load(f)
     except FileNotFoundError:
         return {}
@@ -169,19 +169,18 @@ def resolve(cli_args: dict, front_matter: dict | None = None) -> dict:
 def write_server_info(host: str, port: int, pid: int):
     """Write server connection info so the daemon can find it."""
     ensure_data_dir()
-    with open(SERVER_JSON_PATH, "w") as f:
-        json.dump({"host": host, "port": port, "pid": pid}, f)
+    SERVER_JSON_PATH.write_text(json.dumps({"host": host, "port": port, "pid": pid}))
 
 
 def read_server_info() -> tuple[str, int] | None:
     """Read server connection info. Returns (host, port) or None."""
     try:
-        with open(SERVER_JSON_PATH) as f:
-            data = json.load(f)
-        # Check if the server process is still alive
+        data = json.loads(SERVER_JSON_PATH.read_text())
         pid = data.get("pid")
         if pid:
             try:
+                import os
+
                 os.kill(pid, 0)
             except (ProcessLookupError, PermissionError):
                 return None
@@ -192,7 +191,4 @@ def read_server_info() -> tuple[str, int] | None:
 
 def remove_server_info():
     """Remove the server info file."""
-    try:
-        os.unlink(SERVER_JSON_PATH)
-    except FileNotFoundError:
-        pass
+    SERVER_JSON_PATH.unlink(missing_ok=True)

@@ -1,8 +1,8 @@
 """FastAPI server for wordbird — API + ML inference + static frontend."""
 
-import os
 import webbrowser
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.staticfiles import StaticFiles
@@ -22,7 +22,7 @@ from wordbird.config import (
 from wordbird.server.history import recent, stats
 from wordbird.server.history import record as record_transcription
 
-PACKAGE_DIR = os.path.dirname(__file__)
+PACKAGE_DIR = Path(__file__).parent
 
 
 def _get_effective_config() -> dict:
@@ -254,9 +254,11 @@ def create_app() -> FastAPI:
         }
 
     # Serve the React frontend (static files) — must be last
-    frontend_dist = os.path.join(PACKAGE_DIR, "static")
-    if os.path.isdir(frontend_dist):
-        app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+    frontend_dist = PACKAGE_DIR / "static"
+    if frontend_dist.is_dir():
+        app.mount(
+            "/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend"
+        )
 
     return app
 
