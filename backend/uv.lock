@@ -5567,7 +5567,7 @@ wheels = [
 
 [[package]]
 name = "wordbird"
-version = "0.4.1"
+version = "0.4.2"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -5581,6 +5581,7 @@ dependencies = [
     { name = "pyobjc-framework-cocoa" },
     { name = "pyobjc-framework-quartz" },
     { name = "python-frontmatter" },
+    { name = "python-multipart" },
     { name = "sounddevice" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "uvicorn", extra = ["standard"] },
@@ -5604,6 +5605,7 @@ requires-dist = [
     { name = "pyobjc-framework-cocoa" },
     { name = "pyobjc-framework-quartz" },
     { name = "python-frontmatter" },
+    { name = "python-multipart" },
     { name = "sounddevice" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "uvicorn", extras = ["standard"] },
