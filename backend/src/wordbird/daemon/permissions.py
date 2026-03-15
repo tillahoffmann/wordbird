@@ -1,26 +1,24 @@
-"""macOS permission checks and guidance."""
+"""macOS permission checks."""
 
-import subprocess
-
-
-def _check_accessibility() -> bool:
-    try:
-        result = subprocess.run(
-            [
-                "osascript",
-                "-e",
-                'tell application "System Events" to get name of first process',
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
+import ApplicationServices
+import Quartz
 
 
-def _check_microphone() -> bool:
+def check_accessibility() -> bool:
+    """Check if the app has Accessibility permission."""
+    return ApplicationServices.AXIsProcessTrusted()
+
+
+def check_input_monitoring() -> bool:
+    """Check if the app has Input Monitoring permission."""
+    return Quartz.CGPreflightListenEventAccess()
+
+
+def check_microphone() -> bool:
+    """Check microphone permission by doing a brief recording.
+
+    This triggers the system permission dialog on first run.
+    """
     try:
         import sounddevice as sd
 
@@ -31,53 +29,38 @@ def _check_microphone() -> bool:
         return False
 
 
-_CHECKS = [
-    (
-        "🎤",
-        "Microphone",
-        _check_microphone,
-        "to record your voice",
-        "System Settings > Privacy & Security > Microphone",
-    ),
-    (
-        "🔐",
-        "Accessibility",
-        _check_accessibility,
-        "to paste text and intercept the hotkey",
-        "System Settings > Privacy & Security > Accessibility",
-    ),
-    (
-        "⌨️",
-        "Input Monitoring",
-        None,
-        "to detect the Right Cmd hotkey",
-        "System Settings > Privacy & Security > Input Monitoring",
-    ),
-]
-
-
 def verify_permissions() -> bool:
     """Check required macOS permissions. Returns True if all OK."""
     print("🦜 Wordbird, the contextual transcriber\n")
     print("   Checking permissions...\n")
 
     all_ok = True
-    for icon, name, check_fn, why, path in _CHECKS:
-        if check_fn is None:
-            ok = True
-        else:
-            ok = check_fn()
 
-        if ok:
-            print(f"   {icon} {name} ✓ — {why}")
-        else:
-            all_ok = False
-            print(f"   {icon} {name} ✗ — {why}")
-            print(f"      → {path}")
-            print("      → Add your terminal app, then restart wordbird.")
+    if check_microphone():
+        print("   🎤 Microphone ✓")
+    else:
+        all_ok = False
+        print("   🎤 Microphone ✗ — needed to record your voice")
+        print("      → System Settings > Privacy & Security > Microphone")
+
+    if check_accessibility():
+        print("   🔐 Accessibility ✓")
+    else:
+        all_ok = False
+        print("   🔐 Accessibility ✗ — needed to paste text")
+        print("      → System Settings > Privacy & Security > Accessibility")
+
+    if check_input_monitoring():
+        print("   ⌨️  Input Monitoring ✓")
+    else:
+        all_ok = False
+        print("   ⌨️  Input Monitoring ✗ — needed to detect hotkey")
+        print("      → System Settings > Privacy & Security > Input Monitoring")
+        Quartz.CGRequestListenEventAccess()
 
     print()
     if all_ok:
-        print("   ✅ All detectable permissions OK.")
-        print("   (If the hotkey doesn't respond, check Input Monitoring.)\n")
+        print("   ✅ All permissions OK.\n")
+    else:
+        print("   Add your terminal app, then restart wordbird.\n")
     return all_ok
