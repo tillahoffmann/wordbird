@@ -338,6 +338,22 @@ def server_url() -> str:
     return f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"
 
 
+VITE_DEV_URL = "http://localhost:5173"
+
+
 def open_dashboard():
-    """Open the dashboard in the default browser."""
+    """Open the dashboard in the default browser.
+
+    Prefers the Vite dev server if it's running (for development),
+    otherwise falls back to the backend's static files.
+    """
+    import httpx
+
+    try:
+        resp = httpx.get(VITE_DEV_URL, timeout=1)
+        if resp.status_code == 200:
+            webbrowser.open(VITE_DEV_URL)
+            return
+    except Exception:
+        pass
     webbrowser.open(server_url())

@@ -47,6 +47,7 @@ MODIFIER_KEY_OPTIONS = [
     "lshift",
     "rctrl",
     "lctrl",
+    "fn",
 ]
 TOGGLE_KEY_OPTIONS = ["space", "return", "tab", "escape"]
 
@@ -59,6 +60,7 @@ KEY_LABELS = {
     "lshift": "Left ⇧",
     "rctrl": "Right ⌃",
     "lctrl": "Left ⌃",
+    "fn": "Fn 🌐",
     "space": "Space",
     "return": "Return",
     "tab": "Tab",
@@ -67,6 +69,7 @@ KEY_LABELS = {
 
 TRANSCRIPTION_MODEL_SUGGESTIONS = [
     "mlx-community/parakeet-tdt-0.6b-v2",
+    "mlx-community/parakeet-tdt-1.1b",
 ]
 
 FIX_MODEL_SUGGESTIONS = [
