@@ -1,4 +1,4 @@
-.PHONY: backend-test backend-build backend-dev daemon-dev vscode-package frontend-dev frontend-build frontend-bundle wordbird
+.PHONY: backend-test backend-build backend-dev daemon-dev vscode-package frontend-dev frontend-build frontend-bundle wordbird dev
 
 backend-test:
 	cd backend && uv run pytest tests/ -v
@@ -28,5 +28,17 @@ frontend-bundle:
 	rm -rf backend/src/wordbird/static
 	cp -r frontend/dist backend/src/wordbird/static
 
+# Run everything for production
 wordbird: frontend-bundle
 	cd backend && uv run wordbird
+
+# Run all three dev servers: backend (with reload), frontend (with HMR), daemon
+dev:
+	@trap 'kill 0' INT TERM; \
+	echo "Starting backend on http://127.0.0.1:7870"; \
+	echo "Starting frontend on http://localhost:5173"; \
+	echo "Starting daemon..."; \
+	(cd backend && uv run uvicorn wordbird.server.server:app --reload --host 127.0.0.1 --port 7870) & \
+	(cd frontend && npm run dev) & \
+	sleep 3 && (cd backend && uv run wordbird-daemon) & \
+	wait
