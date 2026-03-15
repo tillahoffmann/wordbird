@@ -162,7 +162,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               }
             />
             <Label htmlFor="submit_with_return">
-              YOLO mode (submit with{" "})
+              YOLO mode (submit with{" "}
               <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
                 {keyLabels[config.modifier_key] || config.modifier_key}
               </kbd>
@@ -170,6 +170,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
                 Return
               </kbd>
+              )
             </Label>
           </div>
         </div>
