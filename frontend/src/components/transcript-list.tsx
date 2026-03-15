@@ -16,6 +16,15 @@ function shortenPath(cwd: string): string {
   return cwd
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 1) return "<1s"
+  const s = Math.floor(seconds)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const rem = s % 60
+  return rem > 0 ? `${m}m ${rem}s` : `${m}m`
+}
+
 function TranscriptItem({ t, onDelete }: { t: Transcription; onDelete?: () => void }) {
   const [showOriginal, setShowOriginal] = useState(false)
   const displayText = t.fixed_text || t.raw_text
@@ -47,7 +56,7 @@ function TranscriptItem({ t, onDelete }: { t: Transcription; onDelete?: () => vo
           <span>{t.timestamp.slice(0, 16).replace("T", " ")}</span>
           {t.app_name && <Badge variant="secondary">{t.app_name}</Badge>}
           {t.duration_seconds != null && (
-            <span className="tabular-nums">{t.duration_seconds.toFixed(1)}s</span>
+            <span className="tabular-nums">{formatDuration(t.duration_seconds)}</span>
           )}
           {t.cwd && (
             <span>
