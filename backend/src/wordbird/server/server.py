@@ -91,21 +91,9 @@ def create_app() -> FastAPI:
             _ml_state["postprocessor"] = PostProcessor()
         return _ml_state["postprocessor"]
 
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        # Preload models on startup
-        print("🦜 Preloading ML models...")
-        t = _get_transcriber()
-        t.load()
-        cfg = _get_effective_config()
-        if not cfg.get("no_fix", False):
-            pp = _get_postprocessor()
-            pp.load()
-        print("🦜 Models ready.")
-        yield
-        # Clean shutdown: stop the ML thread, release models, clean up workers
-        print("🦜 Shutting down...")
-        _ml_executor.shutdown(wait=True)
+    def _cleanup():
+        """Release ML models and worker pools."""
+        _ml_executor.shutdown(wait=False)
         _ml_state["transcriber"] = None
         _ml_state["postprocessor"] = None
         try:
@@ -117,9 +105,32 @@ def create_app() -> FastAPI:
         try:
             from joblib.externals.loky import get_reusable_executor
 
-            get_reusable_executor().shutdown(wait=True, kill_workers=True)
+            get_reusable_executor().shutdown(wait=False, kill_workers=True)
         except Exception:
             pass
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        import atexit
+
+        # Preload models on startup
+        print("🦜 Preloading ML models...")
+        t = _get_transcriber()
+        t.load()
+        cfg = _get_effective_config()
+        if not cfg.get("no_fix", False):
+            pp = _get_postprocessor()
+            pp.load()
+        print("🦜 Models ready.")
+
+        # Register atexit as backup — handles abrupt termination in --reload mode
+        atexit.register(_cleanup)
+
+        yield
+
+        print("🦜 Shutting down...")
+        _cleanup()
+        atexit.unregister(_cleanup)
 
     app = FastAPI(title="Wordbird", lifespan=lifespan)
 

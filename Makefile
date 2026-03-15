@@ -33,12 +33,15 @@ wordbird: frontend-bundle
 	cd backend && uv run wordbird
 
 # Run all three dev servers: backend (with reload), frontend (with HMR), daemon
+# Uses a wrapper script so Ctrl+C cleanly kills all children
 dev:
-	@trap 'kill 0; exit 0' INT TERM; \
+	@bash -c '\
+	cleanup() { kill 0 2>/dev/null; wait 2>/dev/null; exit 0; }; \
+	trap cleanup INT TERM; \
 	echo "Starting backend on http://127.0.0.1:7870"; \
 	echo "Starting frontend on http://localhost:5173"; \
 	echo "Starting daemon..."; \
 	(cd backend && uv run uvicorn wordbird.server.server:app --reload --host 127.0.0.1 --port 7870) & \
 	(cd frontend && npm run dev) & \
 	sleep 3 && (cd backend && uv run wordbird-daemon) & \
-	wait
+	wait'
