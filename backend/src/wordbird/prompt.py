@@ -94,6 +94,95 @@ Output:
 """
 
 
+CLAUDE_INIT_PROMPT = """\
+Generate a WORDBIRD.md file in the current working directory, pre-populated with \
+project-specific terms discovered by analyzing the codebase.
+
+Step 1: Check if WORDBIRD.md already exists. If it does, read it and note its contents. \
+If it does not exist, proceed directly.
+
+Step 2: Explore the codebase. Read ~10-15 files to understand the project. Prioritize:
+1. Package manifests: pyproject.toml, package.json, Cargo.toml, go.mod, etc.
+2. README and docs
+3. Source file sampling: entry points, main modules, config files
+4. CI/CD and tooling: Makefile, Dockerfile, workflow files
+
+Step 3: Identify terms. Categorize into:
+
+Key terms (target: 15-40 terms) — only terms a speech-to-text model is likely to \
+get wrong or that are domain-specific: library/framework names, tool names, \
+project-specific names, acronyms, technical terms with unusual spelling.
+
+Misheard words (target: 5-15 mappings) — think phonetically about what a speech \
+model would produce. Common patterns:
+- Compound words split: "word bird" -> "wordbird", "git hub" -> "GitHub"
+- Spelled-out acronyms: "a p i" -> "API"
+- Sound-alikes: "pie test" -> "pytest", "numb pie" -> "NumPy"
+- Camel/pascal case split: "app kit" -> "AppKit"
+
+Step 4: Write WORDBIRD.md using this exact template:
+
+```
+---
+transcription_model: mlx-community/parakeet-tdt-0.6b-v2
+fix_model: mlx-community/Qwen2.5-1.5B-Instruct-4bit
+---
+
+Fix speech-to-text errors. Output ONLY the corrected text. Do NOT add formatting.
+
+Rules:
+1. KEEP the original capitalization of the first word. "Yes" stays "Yes", not "yes".
+2. NEVER lowercase words that are already capitalized correctly.
+3. Fix punctuation: add commas after introductory words, add missing periods.
+4. Fix misheard tech terms ONLY when obvious from context.
+5. NEVER rephrase, reorder, or restructure sentences.
+6. NEVER remove words the speaker said.
+7. NEVER change meaning.
+8. If the text is already correct, output it unchanged.
+
+Example 1:
+Input: "check the get ignore file for the repo"
+Output: "Check the .gitignore file for the repo."
+
+Example 2:
+Input: "we need to refactor the a p i endpoint"
+Output: "We need to refactor the API endpoint."
+
+Example 3:
+Input: "Yes, I see it now."
+Output: "Yes, I see it now."
+
+Example 4:
+Input: "Actually that won't work because of the bug."
+Output: "Actually, that won't work because of the bug."
+
+Example 5:
+Input: "I think the hard coded defaults changed."
+Output: "I think the hard-coded defaults changed."
+
+Key terms: <COMMA-SEPARATED LIST>
+Misheard words: <EACH ON ITS OWN LINE, format: "misheard phrase" should be "correct term">
+
+Input: "{{ transcript }}"
+Output:
+```
+
+Important: The {{ transcript }} placeholder MUST appear exactly as shown (Jinja2 variable). \
+Keep the 5 standard examples. Key terms on a single comma-separated line. \
+Each misheard mapping on its own line. Keep the total prompt concise.
+
+Step 5: Report the number of key terms and misheard mappings generated.
+"""
+
+CLAUDE_INIT_TOOLS = [
+    "Read",
+    "Glob",
+    "Grep",
+    "Edit(WORDBIRD.md)",
+    "Write(WORDBIRD.md)",
+]
+
+
 def parse_wordbird_md(content: str) -> tuple[dict, str]:
     """Parse YAML front matter and body from a WORDBIRD.md file.
 

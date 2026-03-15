@@ -196,6 +196,10 @@ def _cmd_status(args):
 
 
 def _cmd_init(args):
+    if getattr(args, "claude", None):
+        _cmd_init_claude(args.claude)
+        return
+
     from wordbird.prompt import INIT_TEMPLATE
 
     path = Path.cwd() / "WORDBIRD.md"
@@ -207,6 +211,87 @@ def _cmd_init(args):
 
     print(f"   ✅ Created {path}")
     print("   📝 Edit it to add project-specific terms and context.")
+
+
+def _cmd_init_claude(model: str = "haiku"):
+    """Run Claude Code to generate a WORDBIRD.md with AI-discovered terms."""
+    import json
+    import shutil
+
+    claude_bin = shutil.which("claude")
+    if claude_bin is None:
+        print("   ❌ 'claude' CLI not found. Install Claude Code first:")
+        print("      npm install -g @anthropic-ai/claude-code")
+        sys.exit(1)
+
+    from wordbird.prompt import CLAUDE_INIT_PROMPT, CLAUDE_INIT_TOOLS
+
+    print("🦜 Launching Claude to analyze your codebase...\n")
+    cmd = [
+        claude_bin,
+        "-p",
+        CLAUDE_INIT_PROMPT,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        model,
+        "--allowedTools",
+        ",".join(CLAUDE_INIT_TOOLS),
+    ]
+    cwd = os.getcwd()
+    cwd_prefix = cwd.rstrip("/") + "/"
+
+    def _rel(path: str) -> str:
+        if path.startswith(cwd_prefix):
+            return path[len(cwd_prefix):]
+        return path
+
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+    assert proc.stdout is not None
+
+    final_text = ""
+    try:
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            # Tool use: show which tool and a brief summary
+            if event.get("type") == "assistant" and "message" in event:
+                for block in event["message"].get("content", []):
+                    if block.get("type") == "tool_use":
+                        name = block.get("name", "")
+                        inp = block.get("input", {})
+                        if name in ("Read", "Write", "Edit"):
+                            detail = _rel(inp.get("file_path", ""))
+                            print(f"   📄 {name}: {detail}")
+                        elif name == "Glob":
+                            detail = inp.get("pattern", "")
+                            print(f"   🔍 Glob: {detail}")
+                        elif name == "Grep":
+                            detail = inp.get("pattern", "")
+                            print(f"   🔍 Grep: {detail}")
+
+            # Capture the final result text
+            if event.get("type") == "result":
+                final_text = event.get("result", "")
+
+        proc.wait()
+    except KeyboardInterrupt:
+        proc.terminate()
+        proc.wait()
+        print("\n   ⛔ Cancelled.")
+        sys.exit(1)
+
+    if final_text:
+        print(f"\n{final_text}")
+
+    sys.exit(proc.returncode)
 
 
 def _cmd_config(args):
@@ -271,7 +356,15 @@ def main():
     )
 
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("init", help="Create a WORDBIRD.md in the current directory")
+    init_parser = sub.add_parser("init", help="Create a WORDBIRD.md in the current directory")
+    init_parser.add_argument(
+        "--claude",
+        nargs="?",
+        const="haiku",
+        default=None,
+        metavar="MODEL",
+        help="Use Claude to analyze the codebase and populate terms (default model: haiku)",
+    )
     sub.add_parser("start", help="Start wordbird in the background")
     sub.add_parser("stop", help="Stop wordbird")
     sub.add_parser("status", help="Check if wordbird is running")
