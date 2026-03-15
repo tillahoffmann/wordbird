@@ -15,6 +15,10 @@ vscode-extension/out/
 vscode-extension/*.vsix
 vscode-extension/package-lock.json
 
+# Zed extension
+zed-extension/target/
+*.wasm
+
 # Frontend
 frontend/node_modules/
 frontend/dist/

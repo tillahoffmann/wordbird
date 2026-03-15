@@ -2,7 +2,7 @@
 name = "wordbird"
 version = "0.4.2"
 description = "Voice dictation daemon using NVIDIA Parakeet on Apple Silicon"
-readme = "README.md"
+readme = "../README.md"
 license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
@@ -42,6 +42,7 @@ packages = ["src/wordbird"]
 wordbird = "wordbird.cli:main"
 wordbird-server = "wordbird.cli:server_main"
 wordbird-daemon = "wordbird.cli:daemon_main"
+wordbird-lsp = "wordbird.lsp:main"
 
 [tool.ruff.lint]
 extend-select = ["I"]
