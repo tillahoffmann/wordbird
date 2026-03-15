@@ -344,7 +344,7 @@ def server_url() -> str:
 VITE_DEV_URL = "http://localhost:5173"
 
 
-def open_dashboard():
+def open_dashboard(hash: str | None = None):
     """Open the dashboard in the default browser.
 
     Prefers the Vite dev server if it's running (for development),
@@ -352,11 +352,12 @@ def open_dashboard():
     """
     import httpx
 
+    suffix = f"#{hash}" if hash else ""
     try:
         resp = httpx.get(VITE_DEV_URL, timeout=1)
         if resp.status_code == 200:
-            webbrowser.open(VITE_DEV_URL)
+            webbrowser.open(f"{VITE_DEV_URL}{suffix}")
             return
     except Exception:
         pass
-    webbrowser.open(server_url())
+    webbrowser.open(f"{server_url()}{suffix}")

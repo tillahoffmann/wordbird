@@ -156,6 +156,12 @@ class MenuBar(AppKit.NSObject):
         dashboard_item.setTarget_(self)
         self._menu.addItem_(dashboard_item)
 
+        settings_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Settings…", "openSettings:", ","
+        )
+        settings_item.setTarget_(self)
+        self._menu.addItem_(settings_item)
+
         self._menu.addItem_(AppKit.NSMenuItem.separatorItem())
 
         quit_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
@@ -274,6 +280,11 @@ class MenuBar(AppKit.NSObject):
         from wordbird.server.server import open_dashboard
 
         open_dashboard()
+
+    def openSettings_(self, sender):
+        from wordbird.server.server import open_dashboard
+
+        open_dashboard(hash="settings")
 
     def quit_(self, sender):
         if self._on_quit:

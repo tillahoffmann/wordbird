@@ -8,21 +8,34 @@ import { fetchStats, fetchTranscriptions, type Stats, type Transcription } from 
 function App() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([])
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(
+    window.location.hash === "#settings"
+  )
 
   function refresh() {
     fetchStats().then(setStats)
     fetchTranscriptions().then(setTranscriptions)
   }
 
+  // Sync hash with dialog state
+  function setSettingsOpenWithHash(open: boolean) {
+    setSettingsOpen(open)
+    window.location.hash = open ? "#settings" : ""
+  }
+
   useEffect(() => {
     refresh()
     const interval = setInterval(refresh, 5000)
     const onFocus = () => refresh()
+    const onHashChange = () => {
+      setSettingsOpen(window.location.hash === "#settings")
+    }
     window.addEventListener("focus", onFocus)
+    window.addEventListener("hashchange", onHashChange)
     return () => {
       clearInterval(interval)
       window.removeEventListener("focus", onFocus)
+      window.removeEventListener("hashchange", onHashChange)
     }
   }, [])
 
@@ -34,7 +47,7 @@ function App() {
           Wordbird
         </h1>
         <button
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => setSettingsOpenWithHash(true)}
           className="text-muted-foreground hover:text-foreground p-2 rounded-lg transition-colors"
           title="Settings"
         >
@@ -51,7 +64,7 @@ function App() {
 
       <StatsBar stats={stats} />
       <TranscriptList transcriptions={transcriptions} />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpenWithHash} />
       <Toaster />
     </div>
   )
