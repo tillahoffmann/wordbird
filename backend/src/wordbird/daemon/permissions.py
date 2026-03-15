@@ -31,7 +31,10 @@ def check_microphone() -> bool:
 
 def verify_permissions() -> bool:
     """Check required macOS permissions. Returns True if all OK."""
-    print("🦜 Wordbird, the contextual transcriber\n")
+    from importlib.metadata import version
+
+    ver = version("wordbird")
+    print(f"🦜 Wordbird v{ver}\n")
     print("   Checking permissions...\n")
 
     all_ok = True
