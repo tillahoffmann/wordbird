@@ -202,7 +202,7 @@ def _cmd_status(args):
 
 
 def _cmd_init(args):
-    from wordbird.prompt import DEFAULT_TEMPLATE
+    from wordbird.prompt import INIT_TEMPLATE
 
     path = os.path.join(os.getcwd(), "WORDBIRD.md")
     if os.path.exists(path):
@@ -210,7 +210,7 @@ def _cmd_init(args):
         return
 
     with open(path, "w") as f:
-        f.write(DEFAULT_TEMPLATE)
+        f.write(INIT_TEMPLATE)
 
     print(f"   ✅ Created {path}")
     print("   📝 Edit it to add project-specific terms and context.")

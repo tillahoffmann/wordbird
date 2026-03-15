@@ -1,14 +1,19 @@
 """Tests for prompt template parsing and rendering."""
 
-from wordbird.prompt import DEFAULT_TEMPLATE, parse_wordbird_md
+from wordbird.prompt import DEFAULT_PROMPT, INIT_TEMPLATE, parse_wordbird_md
 from wordbird.server.postprocess import render_prompt
 
 
 class TestParseWordbirdMd:
-    def test_parse_default_template(self):
-        meta, body = parse_wordbird_md(DEFAULT_TEMPLATE)
+    def test_parse_init_template(self):
+        meta, body = parse_wordbird_md(INIT_TEMPLATE)
         assert meta["transcription_model"] == "mlx-community/parakeet-tdt-0.6b-v2"
         assert meta["fix_model"] == "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
+        assert "transcript" in body
+
+    def test_parse_default_prompt(self):
+        meta, body = parse_wordbird_md(DEFAULT_PROMPT)
+        assert meta == {}
         assert "transcript" in body
 
     def test_parse_no_front_matter(self):

@@ -1,9 +1,36 @@
 """Post-process transcription output using a small local LLM."""
 
+from html.parser import HTMLParser
+
 import jinja2
+from markdown_it import MarkdownIt
 from mlx_lm import generate, load
 
-from wordbird.prompt import DEFAULT_FIX_MODEL, DEFAULT_TEMPLATE, parse_wordbird_md
+from wordbird.prompt import DEFAULT_FIX_MODEL, DEFAULT_PROMPT, parse_wordbird_md
+
+_md = MarkdownIt()
+
+
+class _TextExtractor(HTMLParser):
+    """Extract plain text from HTML, discarding all tags."""
+
+    def __init__(self):
+        super().__init__()
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str):
+        self.parts.append(data)
+
+    def get_text(self) -> str:
+        return "".join(self.parts)
+
+
+def strip_markdown(text: str) -> str:
+    """Convert markdown to plain text, removing all formatting."""
+    html = _md.render(text)
+    extractor = _TextExtractor()
+    extractor.feed(html)
+    return extractor.get_text().strip()
 
 
 def render_prompt(template_str: str, transcript: str) -> str:
@@ -47,7 +74,7 @@ class PostProcessor:
         if context_content:
             front_matter, body = parse_wordbird_md(context_content)
         else:
-            front_matter, body = parse_wordbird_md(DEFAULT_TEMPLATE)
+            front_matter, body = parse_wordbird_md(DEFAULT_PROMPT)
 
         # CLI flag overrides front matter
         fix_model = self._cli_model_id or front_matter.get(
@@ -81,6 +108,9 @@ class PostProcessor:
         # Strip surrounding quotes (few-shot format causes the model to quote output)
         if len(result) >= 2 and result[0] == '"' and result[-1] == '"':
             result = result[1:-1]
+
+        # Strip any markdown formatting the model injected
+        result = strip_markdown(result)
 
         # Guard: if result is much shorter, the model hallucinated
         if len(result) < len(text) * 0.5:
