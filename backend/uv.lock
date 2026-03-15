@@ -5572,6 +5572,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "markdown-it-py" },
     { name = "mlx-audio" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -5595,6 +5596,7 @@ dev = [
 requires-dist = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "markdown-it-py" },
     { name = "mlx-audio" },
     { name = "numpy" },
     { name = "pyobjc-core" },
