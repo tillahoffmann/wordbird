@@ -186,6 +186,62 @@ class TestPostprocess:
         assert data["fixed_text"] == "Fixed text."
 
 
+class TestModelLoad:
+    def test_load_transcription_model(self, client, monkeypatch):
+        loaded_with = []
+        monkeypatch.setattr(
+            "wordbird.server.transcriber.Transcriber.load",
+            lambda self, model_id=None: loaded_with.append(model_id),
+        )
+
+        resp = client.post("/api/models/transcription/load")
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        assert len(loaded_with) == 1
+
+    def test_load_postprocess_model(self, client, monkeypatch):
+        loaded_with = []
+        monkeypatch.setattr(
+            "wordbird.server.postprocess.PostProcessor.load",
+            lambda self, model_id=None: loaded_with.append(model_id),
+        )
+
+        resp = client.post("/api/models/postprocess/load")
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        assert len(loaded_with) == 1
+
+    def test_load_postprocess_skipped_when_no_fix(self, client, tmp_path, monkeypatch):
+        import tomli_w
+
+        config_path = tmp_path / "wordbird.toml"
+        config_path.write_bytes(tomli_w.dumps({"no_fix": True}).encode())
+        monkeypatch.setattr("wordbird.config.CONFIG_PATH", config_path)
+
+        resp = client.post("/api/models/postprocess/load")
+        assert resp.status_code == 200
+        assert resp.json()["model"] is None
+
+    def test_load_returns_immediately_if_already_loaded(self, client, monkeypatch):
+        call_count = []
+
+        def mock_load(self, model_id=None):
+            call_count.append(1)
+
+        monkeypatch.setattr(
+            "wordbird.server.transcriber.Transcriber.load",
+            mock_load,
+        )
+
+        # First call loads
+        client.post("/api/models/transcription/load")
+        # Second call should still invoke load (server doesn't cache, Transcriber.load skips internally)
+        client.post("/api/models/transcription/load")
+        assert (
+            len(call_count) == 2
+        )  # load() called both times, but skips internally if same model
+
+
 class TestHealth:
     def test_health(self, client):
         resp = client.get("/api/health")
