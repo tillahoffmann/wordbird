@@ -21,7 +21,7 @@ def _rgb(r, g, b):
     )
 
 
-_ICON_SVG = os.path.join(os.path.dirname(__file__), "icon.svg")
+_ICON_SVG = os.path.join(os.path.dirname(__file__), "static", "icon.svg")
 
 _STATE_LABELS = {
     State.IDLE: "Idle",

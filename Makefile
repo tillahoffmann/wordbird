@@ -25,8 +25,8 @@ frontend-build:
 # Build frontend and copy into backend for serving as static files
 frontend-bundle:
 	cd frontend && npm run build
-	rm -rf backend/src/wordbird/static
-	cp -r frontend/dist backend/src/wordbird/static
+	rm -rf backend/src/wordbird/server/static
+	cp -r frontend/dist backend/src/wordbird/server/static
 
 # Run everything for production
 wordbird: frontend-bundle
