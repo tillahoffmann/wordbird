@@ -34,7 +34,7 @@ wordbird: frontend-bundle
 
 # Run all three dev servers: backend (with reload), frontend (with HMR), daemon
 dev:
-	@trap 'kill 0' INT TERM; \
+	@trap 'kill 0; exit 0' INT TERM; \
 	echo "Starting backend on http://127.0.0.1:7870"; \
 	echo "Starting frontend on http://localhost:5173"; \
 	echo "Starting daemon..."; \

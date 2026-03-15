@@ -1,6 +1,12 @@
 """FastAPI server for wordbird — API + ML inference + static frontend."""
 
 import os
+
+# Prevent loky/joblib semaphore leaks from tokenizer workers.
+# Must be set before any ML imports.
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")
+
 import webbrowser
 from contextlib import asynccontextmanager
 
@@ -78,10 +84,6 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # Prevent loky semaphore leaks from tokenizer/joblib workers
-        os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-        os.environ.setdefault("JOBLIB_START_METHOD", "forkserver")
-
         # Preload models on startup
         print("🦜 Preloading ML models...")
         t = _get_transcriber()
