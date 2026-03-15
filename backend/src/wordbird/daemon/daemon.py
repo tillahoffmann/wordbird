@@ -1,8 +1,8 @@
 """Daemon that handles hotkeys, recording, and UI — delegates transcription to the server."""
 
-import os
 import signal
 import threading
+from pathlib import Path
 
 import AppKit
 import Foundation
@@ -14,7 +14,7 @@ from wordbird.config import CONFIG_PATH, KEY_LABELS
 from wordbird.daemon.menubar import MenuBar, State
 from wordbird.daemon.overlay import Overlay
 from wordbird.daemon.recorder import Recorder
-from wordbird.daemon.typer import type_text
+from wordbird.daemon.typer import press_return, type_text
 
 # macOS keycodes
 KEYCODES = {
@@ -26,6 +26,7 @@ KEYCODES = {
     "lshift": 56,
     "rctrl": 62,
     "lctrl": 59,
+    "fn": 63,
     "space": 49,
     "return": 36,
     "tab": 48,
@@ -42,7 +43,11 @@ MODIFIER_FLAGS = {
     "lshift": Quartz.kCGEventFlagMaskShift,
     "rctrl": Quartz.kCGEventFlagMaskControl,
     "lctrl": Quartz.kCGEventFlagMaskControl,
+    "fn": Quartz.kCGEventFlagMaskSecondaryFn,
 }
+
+_STATIC_DIR = Path(__file__).parent / "static"
+_BONG_PATH = str(_STATIC_DIR / "bong.ogg")
 
 # How often to check if the event tap is still enabled (seconds)
 _TAP_CHECK_INTERVAL = 5.0
@@ -56,20 +61,24 @@ class Daemon:
 
     def __init__(
         self,
-        modifier_key: str = "rcmd",
-        toggle_key: str = "space",
+        cfg: dict,
         server_url: str = "http://127.0.0.1:7870",
-        no_fix: bool = False,
     ):
         self.recorder = Recorder()
         self._server_url = server_url
-        self._no_fix = no_fix
+        self._submit_after = False
 
-        self._modifier_keycode = KEYCODES[modifier_key]
-        self._modifier_flag = MODIFIER_FLAGS[modifier_key]
-        self._toggle_keycode = KEYCODES[toggle_key]
-        self._modifier_label = KEY_LABELS.get(modifier_key, modifier_key)
-        self._toggle_label = KEY_LABELS.get(toggle_key, toggle_key)
+        # Set defaults before apply_config overwrites them
+        self._modifier_keycode = KEYCODES["rcmd"]
+        self._modifier_flag = MODIFIER_FLAGS["rcmd"]
+        self._toggle_keycode = KEYCODES["space"]
+        self._modifier_label = KEY_LABELS["rcmd"]
+        self._toggle_label = KEY_LABELS["space"]
+        self._no_fix = False
+        self._sound = True
+        self._submit_with_return = False
+
+        self.apply_config(cfg)
 
         self.menubar = MenuBar.alloc().init()
         self.menubar.set_on_quit(self._on_quit)
@@ -91,14 +100,14 @@ class Daemon:
     def _update_config_mtime(self):
         """Record the current mtime of the config file."""
         try:
-            self._config_mtime = os.path.getmtime(CONFIG_PATH)
+            self._config_mtime = CONFIG_PATH.stat().st_mtime
         except FileNotFoundError:
             self._config_mtime = 0.0
 
     def _check_config_changed(self):
         """Reload config if the file has been modified."""
         try:
-            mtime = os.path.getmtime(CONFIG_PATH)
+            mtime = CONFIG_PATH.stat().st_mtime
         except FileNotFoundError:
             return
         if mtime != self._config_mtime:
@@ -119,6 +128,8 @@ class Daemon:
         self._modifier_label = KEY_LABELS.get(modifier_key, modifier_key)
         self._toggle_label = KEY_LABELS.get(toggle_key, toggle_key)
         self._no_fix = cfg.get("no_fix", False)
+        self._sound = cfg.get("sound", True)
+        self._submit_with_return = cfg.get("submit_with_return", False)
         print(f"   🔄 Config reloaded: {self._modifier_label} + {self._toggle_label}")
 
     def _toggle_recording(self):
@@ -148,24 +159,61 @@ class Daemon:
         print("   🔌 Connecting mic...")
         self.recorder.start()
 
+        def _warm_models():
+            """Pre-load models while mic connects."""
+            try:
+                httpx.post(
+                    f"{self._server_url}/api/models/transcription/load", timeout=120
+                )
+                httpx.post(
+                    f"{self._server_url}/api/models/postprocess/load", timeout=120
+                )
+            except Exception:
+                pass  # Non-critical; models load on first transcribe anyway
+
         def _wait_for_mic():
+            import subprocess
             import time
 
+            # Start model warm-up in parallel
+            warm_thread = threading.Thread(target=_warm_models, daemon=True)
+            warm_thread.start()
+
+            deadline = time.monotonic() + 5.0
             while self.recorder.is_recording and not self.recorder.mic_ready:
+                if time.monotonic() > deadline:
+                    print("   ❌ Mic did not produce audio within 5 seconds.")
+                    self.recorder.stop()
+                    self.menubar.set_state(State.IDLE)
+                    self.overlay.show_error("Mic not responding")
+                    return
                 time.sleep(0.05)
             if self.recorder.is_recording:
+                # If models are still loading, show warming state
+                if warm_thread.is_alive():
+                    self.overlay.show_warming()
+                    print("   🔥 Warming up models...")
+                    warm_thread.join()
                 self.menubar.set_state(State.LISTENING)
-                print("   🎤 Listening...")
+                mic = self.recorder.device_name or "unknown"
+                print(f"   🎤 Listening ({mic})...")
+                if self._sound:
+                    subprocess.Popen(
+                        ["afplay", _BONG_PATH],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
 
         threading.Thread(target=_wait_for_mic, daemon=True).start()
 
-    def _stop_and_transcribe(self):
+    def _stop_and_transcribe(self, submit: bool = False):
         """Stop recording and send to server for transcription."""
         if self._transcribing:
             return
         if not self.recorder.is_recording:
             return
 
+        self._submit_after = submit
         print("   ⏹️  Stopped recording.")
         wav_bytes, duration = self.recorder.stop()
 
@@ -253,6 +301,11 @@ class Daemon:
             word_count = len(final_text.split())
 
             type_text(final_text)
+            if self._submit_after:
+                import time
+
+                time.sleep(0.05)
+                press_return()
             self.overlay.show_done(word_count)
 
             # Record in history via server
@@ -322,6 +375,16 @@ class Daemon:
             # Modifier + toggle key — swallow to prevent Spotlight etc.
             if keycode == self._toggle_keycode and self._modifier_down:
                 self._toggle_recording()
+                return None
+
+            # Modifier + Return — stop and submit (if enabled and recording)
+            if (
+                keycode == KEYCODES["return"]
+                and self._modifier_down
+                and self._submit_with_return
+                and self.recorder.is_recording
+            ):
+                self._stop_and_transcribe(submit=True)
                 return None
 
             # Escape aborts (but don't swallow it)

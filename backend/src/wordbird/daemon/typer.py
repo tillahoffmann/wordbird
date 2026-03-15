@@ -7,6 +7,7 @@ import AppKit
 import Quartz
 
 _KEYCODE_V = 9
+_KEYCODE_RETURN = 36
 _paste_lock = threading.Lock()
 
 
@@ -79,3 +80,12 @@ def type_text(text: str):
         # Wait for paste to complete, then restore
         time.sleep(0.15)
         _restore_clipboard(saved_items, saved_change_count)
+
+
+def press_return():
+    """Simulate pressing the Return key."""
+    source = Quartz.CGEventSourceCreate(Quartz.kCGEventSourceStateCombinedSessionState)
+    down = Quartz.CGEventCreateKeyboardEvent(source, _KEYCODE_RETURN, True)
+    Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, down)
+    up = Quartz.CGEventCreateKeyboardEvent(source, _KEYCODE_RETURN, False)
+    Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, up)

@@ -5,6 +5,7 @@ import os
 import signal
 import subprocess
 import sys
+from pathlib import Path
 
 from wordbird.config import (
     CONFIG_PATH,
@@ -24,29 +25,21 @@ from wordbird.config import (
 
 def _read_pid() -> int | None:
     try:
-        with open(PIDFILE) as f:
-            pid = int(f.read().strip())
+        pid = int(PIDFILE.read_text().strip())
         os.kill(pid, 0)
         return pid
     except (FileNotFoundError, ValueError, ProcessLookupError, PermissionError):
-        try:
-            os.unlink(PIDFILE)
-        except FileNotFoundError:
-            pass
+        PIDFILE.unlink(missing_ok=True)
         return None
 
 
 def _write_pid():
     ensure_data_dir()
-    with open(PIDFILE, "w") as f:
-        f.write(str(os.getpid()))
+    PIDFILE.write_text(str(os.getpid()))
 
 
 def _remove_pid():
-    try:
-        os.unlink(PIDFILE)
-    except FileNotFoundError:
-        pass
+    PIDFILE.unlink(missing_ok=True)
 
 
 # --- Shared helpers ---
@@ -86,10 +79,8 @@ def _create_daemon(cfg: dict, url: str | None = None):
     from wordbird.server.server import server_url
 
     return Daemon(
-        modifier_key=cfg["modifier_key"],
-        toggle_key=cfg["toggle_key"],
+        cfg=cfg,
         server_url=url or server_url(),
-        no_fix=cfg["no_fix"],
     )
 
 
@@ -159,13 +150,16 @@ def _cmd_start(args):
     ensure_data_dir()
     log_file = open(LOG_PATH, "a")
 
-    proc = subprocess.Popen(
-        cmd,
-        stdout=log_file,
-        stderr=log_file,
-        stdin=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=log_file,
+            stderr=log_file,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    finally:
+        log_file.close()
 
     try:
         proc.wait(timeout=2)
@@ -204,28 +198,25 @@ def _cmd_status(args):
 def _cmd_init(args):
     from wordbird.prompt import INIT_TEMPLATE
 
-    path = os.path.join(os.getcwd(), "WORDBIRD.md")
-    if os.path.exists(path):
+    path = Path.cwd() / "WORDBIRD.md"
+    if path.exists():
         print(f"   ⚠️  {path} already exists.")
         return
 
-    with open(path, "w") as f:
-        f.write(INIT_TEMPLATE)
+    path.write_text(INIT_TEMPLATE)
 
     print(f"   ✅ Created {path}")
     print("   📝 Edit it to add project-specific terms and context.")
 
 
 def _cmd_config(args):
-    if not os.path.exists(CONFIG_PATH):
+    if not CONFIG_PATH.exists():
         ensure_data_dir()
-        with open(CONFIG_PATH, "w") as f:
-            f.write(DEFAULT_CONFIG_TOML)
+        CONFIG_PATH.write_text(DEFAULT_CONFIG_TOML)
         print(f"   ✅ Created {CONFIG_PATH}")
     else:
         print(f"   📄 {CONFIG_PATH}\n")
-        with open(CONFIG_PATH) as f:
-            print(f.read())
+        print(CONFIG_PATH.read_text())
 
     cfg = load_config()
     if cfg:

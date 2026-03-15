@@ -112,6 +112,19 @@ def recent(limit: int = 20) -> list[dict]:
         conn.close()
 
 
+def delete(transcription_id: int) -> bool:
+    """Delete a transcription by ID. Returns True if deleted."""
+    conn = _connect()
+    try:
+        cursor = conn.execute(
+            "DELETE FROM transcriptions WHERE id = ?", (transcription_id,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
 def stats() -> dict:
     """Return aggregate statistics."""
     conn = _connect()

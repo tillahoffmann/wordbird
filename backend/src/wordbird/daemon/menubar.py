@@ -1,7 +1,7 @@
 """macOS menu bar icon with state indicators."""
 
-import os
 from enum import Enum, auto
+from pathlib import Path
 
 import AppKit
 import Foundation
@@ -21,7 +21,7 @@ def _rgb(r, g, b):
     )
 
 
-_ICON_SVG = os.path.join(os.path.dirname(__file__), "icon.svg")
+_ICON_SVG = str(Path(__file__).parent / "static" / "icon.svg")
 
 _STATE_LABELS = {
     State.IDLE: "Idle",
@@ -156,6 +156,12 @@ class MenuBar(AppKit.NSObject):
         dashboard_item.setTarget_(self)
         self._menu.addItem_(dashboard_item)
 
+        settings_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Settings…", "openSettings:", ","
+        )
+        settings_item.setTarget_(self)
+        self._menu.addItem_(settings_item)
+
         self._menu.addItem_(AppKit.NSMenuItem.separatorItem())
 
         quit_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
@@ -274,6 +280,11 @@ class MenuBar(AppKit.NSObject):
         from wordbird.server.server import open_dashboard
 
         open_dashboard()
+
+    def openSettings_(self, sender):
+        from wordbird.server.server import open_dashboard
+
+        open_dashboard(hash="settings")
 
     def quit_(self, sender):
         if self._on_quit:

@@ -7,7 +7,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -19,6 +18,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { fetchConfig, saveConfig, type ConfigData } from "@/lib/api"
+import { ComboboxInput } from "@/components/combobox-input"
 
 interface SettingsDialogProps {
   open: boolean
@@ -30,6 +30,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [modifierKeyOptions, setModifierKeyOptions] = useState<string[]>([])
   const [toggleKeyOptions, setToggleKeyOptions] = useState<string[]>([])
   const [keyLabels, setKeyLabels] = useState<Record<string, string>>({})
+  const [sttModels, setSttModels] = useState<string[]>([])
+  const [fixModels, setFixModels] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -39,6 +41,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         setModifierKeyOptions(data.modifier_key_options)
         setToggleKeyOptions(data.toggle_key_options)
         setKeyLabels(data.key_labels)
+        setSttModels(data.transcription_model_suggestions)
+        setFixModels(data.fix_model_suggestions)
       })
     }
   }, [open])
@@ -109,23 +113,21 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
           <div className="space-y-2">
             <Label htmlFor="transcription_model">Transcription model</Label>
-            <Input
+            <ComboboxInput
               id="transcription_model"
               value={config.transcription_model}
-              onChange={(e) =>
-                setConfig({ ...config, transcription_model: e.target.value })
-              }
+              onChange={(v) => setConfig({ ...config, transcription_model: v })}
+              suggestions={sttModels}
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="fix_model">Post-processing model</Label>
-            <Input
+            <ComboboxInput
               id="fix_model"
               value={config.fix_model}
-              onChange={(e) =>
-                setConfig({ ...config, fix_model: e.target.value })
-              }
+              onChange={(v) => setConfig({ ...config, fix_model: v })}
+              suggestions={fixModels}
             />
           </div>
 
@@ -138,6 +140,38 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               }
             />
             <Label htmlFor="no_fix">Disable post-processing</Label>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="sound"
+              checked={config.sound}
+              onCheckedChange={(checked) =>
+                setConfig({ ...config, sound: checked === true })
+              }
+            />
+            <Label htmlFor="sound">Play sound when mic is ready</Label>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="submit_with_return"
+              checked={config.submit_with_return}
+              onCheckedChange={(checked) =>
+                setConfig({ ...config, submit_with_return: checked === true })
+              }
+            />
+            <Label htmlFor="submit_with_return">
+              YOLO mode (submit with{" "}
+              <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
+                {keyLabels[config.modifier_key] || config.modifier_key}
+              </kbd>
+              {" + "}
+              <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
+                Return
+              </kbd>
+              )
+            </Label>
           </div>
         </div>
         <DialogFooter>

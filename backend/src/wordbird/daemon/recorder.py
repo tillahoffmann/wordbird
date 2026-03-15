@@ -39,6 +39,15 @@ class Recorder:
         """True once the mic has produced non-silent audio."""
         return self._mic_ready
 
+    @property
+    def device_name(self) -> str | None:
+        """Name of the current input device."""
+        try:
+            device = sd.query_devices(kind="input")
+            return device["name"] if device else None
+        except Exception:
+            return None
+
     def start(self):
         """Open the mic and start recording."""
         with self._lock:

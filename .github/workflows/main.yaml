@@ -35,7 +35,7 @@ jobs:
           node-version: 20
       # Build frontend and bundle into backend
       - run: cd frontend && npm ci && npm run build
-      - run: cp -r frontend/dist backend/src/wordbird/static
+      - run: cp -r frontend/dist backend/src/wordbird/server/static
       # Build Python package
       - run: cp README.md backend/
       - run: cd backend && uv build

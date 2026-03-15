@@ -13,13 +13,13 @@ from wordbird.daemon.context import (
 class TestFindContextFile:
     def test_finds_in_current_dir(self, tmp_path):
         (tmp_path / "WORDBIRD.md").write_text("test")
-        assert find_context_file(str(tmp_path)) == str(tmp_path / "WORDBIRD.md")
+        assert find_context_file(str(tmp_path)) == tmp_path / "WORDBIRD.md"
 
     def test_finds_in_parent_dir(self, tmp_path):
         (tmp_path / "WORDBIRD.md").write_text("test")
         child = tmp_path / "sub" / "deep"
         child.mkdir(parents=True)
-        assert find_context_file(str(child)) == str(tmp_path / "WORDBIRD.md")
+        assert find_context_file(str(child)) == tmp_path / "WORDBIRD.md"
 
     def test_returns_none_when_not_found(self, tmp_path):
         assert find_context_file(str(tmp_path)) is None
@@ -34,9 +34,7 @@ class TestActiveContext:
         }
         ctx_path = tmp_path / "active-context.json"
         ctx_path.write_text(json.dumps(ctx))
-        monkeypatch.setattr(
-            "wordbird.daemon.context.VSCODE_CONTEXT_PATH", str(ctx_path)
-        )
+        monkeypatch.setattr("wordbird.daemon.context.VSCODE_CONTEXT_PATH", ctx_path)
 
         workspace, content = _read_active_context(12345)
         assert workspace == "/tmp/proj"
@@ -46,9 +44,7 @@ class TestActiveContext:
         ctx = {"pid": 12345, "workspace": "/tmp/proj", "wordbird_md": "content"}
         ctx_path = tmp_path / "active-context.json"
         ctx_path.write_text(json.dumps(ctx))
-        monkeypatch.setattr(
-            "wordbird.daemon.context.VSCODE_CONTEXT_PATH", str(ctx_path)
-        )
+        monkeypatch.setattr("wordbird.daemon.context.VSCODE_CONTEXT_PATH", ctx_path)
 
         workspace, content = _read_active_context(99999)
         assert workspace is None
@@ -56,7 +52,7 @@ class TestActiveContext:
 
     def test_handles_missing_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            "wordbird.daemon.context.VSCODE_CONTEXT_PATH", str(tmp_path / "nope.json")
+            "wordbird.daemon.context.VSCODE_CONTEXT_PATH", tmp_path / "nope.json"
         )
         workspace, content = _read_active_context(12345)
         assert workspace is None
@@ -66,9 +62,7 @@ class TestActiveContext:
         ctx = {"pid": 12345, "workspace": "/tmp/proj", "wordbird_md": None}
         ctx_path = tmp_path / "active-context.json"
         ctx_path.write_text(json.dumps(ctx))
-        monkeypatch.setattr(
-            "wordbird.daemon.context.VSCODE_CONTEXT_PATH", str(ctx_path)
-        )
+        monkeypatch.setattr("wordbird.daemon.context.VSCODE_CONTEXT_PATH", ctx_path)
 
         workspace, content = _read_active_context(12345)
         assert workspace == "/tmp/proj"

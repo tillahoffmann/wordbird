@@ -3,8 +3,8 @@
 import glob
 import json
 import logging
-import os
 import subprocess
+from pathlib import Path
 
 import AppKit
 import Quartz
@@ -13,8 +13,8 @@ from wordbird.config import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-VSCODE_CONTEXT_PATH = os.path.join(DATA_DIR, "vscode-context.json")
-EDITOR_CONTEXTS_DIR = os.path.join(DATA_DIR, "editor-contexts")
+VSCODE_CONTEXT_PATH = DATA_DIR / "vscode-context.json"
+EDITOR_CONTEXTS_DIR = DATA_DIR / "editor-contexts"
 
 _VSCODE_BUNDLE_IDS = {
     "com.microsoft.VSCode",
@@ -113,8 +113,7 @@ def _is_child_of(child_pid: int, parent_pid: int) -> bool:
 def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
     """Read workspace and WORDBIRD.md from active-context.json."""
     try:
-        with open(VSCODE_CONTEXT_PATH) as f:
-            data = json.load(f)
+        data = json.loads(VSCODE_CONTEXT_PATH.read_text())
 
         ctx_pid = data.get("pid")
         if ctx_pid != frontmost_pid and not _is_child_of(ctx_pid, frontmost_pid):
@@ -211,14 +210,14 @@ def _read_editor_context(frontmost_pid: int) -> tuple[str | None, str | None]:
     return workspace, wordbird_md
 
 
-def find_context_file(start_dir: str) -> str | None:
+def find_context_file(start_dir: str) -> Path | None:
     """Walk up from start_dir looking for a WORDBIRD.md file."""
-    current = os.path.abspath(start_dir)
+    current = Path(start_dir).resolve()
     while True:
-        candidate = os.path.join(current, "WORDBIRD.md")
-        if os.path.isfile(candidate):
+        candidate = current / "WORDBIRD.md"
+        if candidate.is_file():
             return candidate
-        parent = os.path.dirname(current)
+        parent = current.parent
         if parent == current:
             break
         current = parent
@@ -238,8 +237,7 @@ def get_context() -> tuple[str, str | None, str | None]:
             context_file = find_context_file(cwd)
             if context_file:
                 try:
-                    with open(context_file) as f:
-                        context_content = f.read()
+                    context_content = context_file.read_text()
                 except Exception:
                     logger.debug("Failed to read %s", context_file, exc_info=True)
 
