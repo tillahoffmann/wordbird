@@ -5,9 +5,8 @@ import * as os from "os";
 
 const CONTEXT_PATH = path.join(
   os.homedir(),
-  ".config",
-  "wordbird",
-  "active-context.json"
+  ".wordbird",
+  "vscode-context.json"
 );
 
 interface WordbirdContext {

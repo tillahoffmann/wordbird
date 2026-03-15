@@ -30,7 +30,7 @@ class TestActiveContext:
         ctx_path = tmp_path / "active-context.json"
         ctx_path.write_text(json.dumps(ctx))
         monkeypatch.setattr(
-            "wordbird.daemon.context.ACTIVE_CONTEXT_PATH", str(ctx_path)
+            "wordbird.daemon.context.VSCODE_CONTEXT_PATH", str(ctx_path)
         )
 
         workspace, content = _read_active_context(12345)
@@ -42,7 +42,7 @@ class TestActiveContext:
         ctx_path = tmp_path / "active-context.json"
         ctx_path.write_text(json.dumps(ctx))
         monkeypatch.setattr(
-            "wordbird.daemon.context.ACTIVE_CONTEXT_PATH", str(ctx_path)
+            "wordbird.daemon.context.VSCODE_CONTEXT_PATH", str(ctx_path)
         )
 
         workspace, content = _read_active_context(99999)
@@ -51,7 +51,7 @@ class TestActiveContext:
 
     def test_handles_missing_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            "wordbird.daemon.context.ACTIVE_CONTEXT_PATH", str(tmp_path / "nope.json")
+            "wordbird.daemon.context.VSCODE_CONTEXT_PATH", str(tmp_path / "nope.json")
         )
         workspace, content = _read_active_context(12345)
         assert workspace is None
@@ -62,7 +62,7 @@ class TestActiveContext:
         ctx_path = tmp_path / "active-context.json"
         ctx_path.write_text(json.dumps(ctx))
         monkeypatch.setattr(
-            "wordbird.daemon.context.ACTIVE_CONTEXT_PATH", str(ctx_path)
+            "wordbird.daemon.context.VSCODE_CONTEXT_PATH", str(ctx_path)
         )
 
         workspace, content = _read_active_context(12345)

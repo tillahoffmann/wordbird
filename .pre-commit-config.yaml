@@ -37,3 +37,10 @@ repos:
         language: system
         files: ^frontend/
         pass_filenames: false
+
+      - id: vscode-build
+        name: vscode extension build
+        entry: bash -c 'cd vscode-extension && npx tsc'
+        language: system
+        files: ^vscode-extension/
+        pass_filenames: false

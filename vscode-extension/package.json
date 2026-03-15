@@ -2,7 +2,7 @@
   "name": "wordbird",
   "displayName": "Wordbird",
   "description": "Context bridge for Wordbird voice dictation — connects your workspace to local speech-to-text",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "tillahoffmann",
   "homepage": "https://github.com/tillahoffmann/wordbird",
   "repository": {

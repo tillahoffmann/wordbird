@@ -11,7 +11,7 @@ from wordbird.config import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-ACTIVE_CONTEXT_PATH = os.path.join(DATA_DIR, "active-context.json")
+VSCODE_CONTEXT_PATH = os.path.join(DATA_DIR, "vscode-context.json")
 
 _VSCODE_BUNDLE_IDS = {
     "com.microsoft.VSCode",
@@ -105,7 +105,7 @@ def _is_child_of(child_pid: int, parent_pid: int) -> bool:
 def _read_active_context(frontmost_pid: int) -> tuple[str | None, str | None]:
     """Read workspace and WORDBIRD.md from active-context.json."""
     try:
-        with open(ACTIVE_CONTEXT_PATH) as f:
+        with open(VSCODE_CONTEXT_PATH) as f:
             data = json.load(f)
 
         ctx_pid = data.get("pid")
