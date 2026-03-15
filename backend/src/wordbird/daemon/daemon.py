@@ -163,7 +163,14 @@ class Daemon:
             import subprocess
             import time
 
+            deadline = time.monotonic() + 5.0
             while self.recorder.is_recording and not self.recorder.mic_ready:
+                if time.monotonic() > deadline:
+                    print("   ❌ Mic did not produce audio within 5 seconds.")
+                    self.recorder.stop()
+                    self.menubar.set_state(State.IDLE)
+                    self.overlay.show_error("Mic not responding")
+                    return
                 time.sleep(0.05)
             if self.recorder.is_recording:
                 self.menubar.set_state(State.LISTENING)
