@@ -181,11 +181,15 @@ def create_app() -> FastAPI:
 
         from wordbird.prompt import parse_wordbird_md
 
+        # Priority: WORDBIRD.md front matter > user config > default
+        cfg = _get_effective_config()
         front_matter = {}
         if context_content:
             front_matter, _ = parse_wordbird_md(context_content)
 
-        transcription_model = front_matter.get("transcription_model")
+        transcription_model = front_matter.get(
+            "transcription_model", cfg.get("transcription_model")
+        )
 
         t = _get_transcriber()
         raw_text = await _run_ml(t.transcribe, wav_bytes, model_id=transcription_model)
@@ -198,9 +202,13 @@ def create_app() -> FastAPI:
     @app.post("/api/postprocess")
     async def postprocess(req: PostProcessRequest):
         """Post-process transcribed text with LLM."""
+        cfg = _get_effective_config()
         pp = _get_postprocessor()
         fixed_text, _ = await _run_ml(
-            pp.fix, req.text, context_content=req.context_content or None
+            pp.fix,
+            req.text,
+            context_content=req.context_content or None,
+            model_id=cfg.get("fix_model"),
         )
         return {
             "fixed_text": fixed_text,
@@ -238,11 +246,14 @@ def create_app() -> FastAPI:
 
         from wordbird.prompt import parse_wordbird_md
 
+        cfg = _get_effective_config()
         front_matter = {}
         if context_content:
             front_matter, _ = parse_wordbird_md(context_content)
 
-        transcription_model = front_matter.get("transcription_model")
+        transcription_model = front_matter.get(
+            "transcription_model", cfg.get("transcription_model")
+        )
 
         t = _get_transcriber()
         raw_text = await _run_ml(t.transcribe, wav_bytes, model_id=transcription_model)
@@ -250,14 +261,16 @@ def create_app() -> FastAPI:
         if not raw_text:
             return {"raw_text": "", "fixed_text": None, "word_count": 0}
 
-        cfg = _get_effective_config()
         skip_fix = no_fix or cfg.get("no_fix", False)
         fixed_text = None
 
         if not skip_fix:
             pp = _get_postprocessor()
             fixed_text, _ = await _run_ml(
-                pp.fix, raw_text, context_content=context_content or None
+                pp.fix,
+                raw_text,
+                context_content=context_content or None,
+                model_id=cfg.get("fix_model"),
             )
 
         final_text = fixed_text or raw_text

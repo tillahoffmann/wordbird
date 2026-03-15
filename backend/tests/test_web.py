@@ -170,7 +170,7 @@ class TestPostprocess:
     def test_postprocess_with_mock(self, client, monkeypatch):
         monkeypatch.setattr(
             "wordbird.server.postprocess.PostProcessor.fix",
-            lambda self, text, context_content=None: ("Fixed text.", {}),
+            lambda self, text, context_content=None, model_id=None: ("Fixed text.", {}),
         )
         monkeypatch.setattr(
             "wordbird.server.postprocess.PostProcessor.load",
