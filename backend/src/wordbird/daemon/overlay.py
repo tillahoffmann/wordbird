@@ -231,7 +231,8 @@ class Overlay(Foundation.NSObject):
     # --- Public API (safe to call from any thread) ---
 
     @objc.python_method
-    def show_connecting(self):
+    def show_connecting(self, mic_name: str = "Mic"):
+        self._connecting_mic_name = mic_name
         self._main("doShowConnecting:")
 
     def doShowConnecting_(self, _):
@@ -244,7 +245,8 @@ class Overlay(Foundation.NSObject):
         if mic_ready:
             self.doShowRecording_(None)
             return
-        self._show_pill("mic.fill", "Connecting mic", YELLOW, cancellable=True)
+        name = getattr(self, "_connecting_mic_name", "Mic")
+        self._show_pill("mic.fill", name, YELLOW, cancellable=True)
         alpha = 0.7 + 0.3 * math.sin(self._tick * 0.33)
         self._icon_view.setAlphaValue_(alpha)
         self._tick += 1

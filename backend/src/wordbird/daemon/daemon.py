@@ -167,10 +167,10 @@ class Daemon:
             return
 
         self.menubar.set_state(State.CONNECTING)
-        self.overlay.show_connecting()
         self.recorder.start()
-        mic = self.recorder.device_name or "unknown"
-        print(f"   🔌 Connecting mic ({mic})...")
+        mic = self.recorder.device_name or "Mic"
+        self.overlay.show_connecting(mic)
+        print(f"   🔌 Connecting {mic}...")
 
         # Fire off model warm-up in background — runs while user records
         self._stt_warm = threading.Event()
