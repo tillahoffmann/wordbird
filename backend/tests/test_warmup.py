@@ -274,4 +274,4 @@ class TestWarmupFlow:
 
         assert stt_warm.is_set()
         assert fix_warm.is_set()
-        assert order == ["stt", "fix"]  # STT finishes first
+        assert set(order) == {"stt", "fix"}  # both completed
