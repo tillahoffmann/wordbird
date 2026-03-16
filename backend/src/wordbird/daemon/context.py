@@ -159,18 +159,22 @@ def _read_wordbird_md_from_disk(workspace: str) -> str | None:
 def _read_editor_contexts(frontmost_pid: int) -> tuple[str | None, str | None]:
     """Scan editor-contexts/ for the context matching the frontmost app.
 
-    Cleans up stale context files first, then matches by PID ancestry.
-    If multiple candidates match, checks if all WORDBIRD.md contents are
-    identical (in which case it doesn't matter which we pick). If they
-    differ, reads from disk to find the one matching the focused window.
+    Resolution order:
+    1. Filter by PID ancestry
+    2. One candidate → use it
+    3. All candidates have identical WORDBIRD.md → use any
+    4. Contents differ → match by focused window title
+    5. Still ambiguous → read WORDBIRD.md from disk in each workspace,
+       the one where disk content matches the context file is correct
+    6. Cannot determine → return None
     """
     _cleanup_stale_contexts()
 
     if not EDITOR_CONTEXTS_DIR.is_dir():
         return None, None
 
-    # Collect candidates that belong to the frontmost app
-    candidates: list[tuple[float, str | None, str | None]] = []
+    # Step 1: collect candidates that belong to the frontmost app
+    candidates: list[tuple[str | None, str | None]] = []
     for path in EDITOR_CONTEXTS_DIR.iterdir():
         if path.suffix != ".json":
             continue
@@ -186,39 +190,42 @@ def _read_editor_contexts(frontmost_pid: int) -> tuple[str | None, str | None]:
         if ctx_pid != frontmost_pid and not _is_child_of(ctx_pid, frontmost_pid):
             continue
 
-        workspace = data.get("workspace")
-        wordbird_md = data.get("wordbird_md")
-        mtime = path.stat().st_mtime
-        candidates.append((mtime, workspace, wordbird_md))
+        candidates.append((data.get("workspace"), data.get("wordbird_md")))
 
     if not candidates:
         return None, None
 
+    # Step 2: single candidate
     if len(candidates) == 1:
-        _, workspace, wordbird_md = candidates[0]
-        return workspace, wordbird_md
+        return candidates[0]
 
-    # Multiple candidates. If all WORDBIRD.md contents are the same,
-    # it doesn't matter which we pick.
-    contents = {c[2] for c in candidates}
+    # Step 3: all WORDBIRD.md contents identical
+    contents = {c[1] for c in candidates}
     if len(contents) == 1:
-        # All identical — pick the most recent
-        candidates.sort(reverse=True)
-        _, workspace, wordbird_md = candidates[0]
-        return workspace, wordbird_md
+        return candidates[0]
 
-    # Contents differ — use the focused window title to find the right workspace,
-    # then read WORDBIRD.md from disk to verify.
+    # Step 4: contents differ — match by focused window title
     title = _get_focused_window_title(frontmost_pid)
     if title:
-        for _, workspace, wordbird_md in candidates:
+        for workspace, wordbird_md in candidates:
             if workspace and Path(workspace).name in title:
                 return workspace, wordbird_md
 
-    # Last resort: most recently modified
-    candidates.sort(reverse=True)
-    _, workspace, wordbird_md = candidates[0]
-    return workspace, wordbird_md
+    # Step 5: read WORDBIRD.md from disk in each workspace and compare
+    # against what the context file has. The matching one is correct.
+    for workspace, wordbird_md in candidates:
+        if workspace and wordbird_md is not None:
+            disk_content = _read_wordbird_md_from_disk(workspace)
+            if disk_content == wordbird_md:
+                return workspace, wordbird_md
+
+    # Step 6: cannot determine
+    logger.debug(
+        "Could not disambiguate %d editor contexts for pid %d",
+        len(candidates),
+        frontmost_pid,
+    )
+    return None, None
 
 
 def find_context_file(start_dir: str) -> Path | None:

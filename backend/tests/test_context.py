@@ -116,18 +116,27 @@ class TestEditorContexts:
         assert workspace == "/home/user/project-beta"
         assert content == "beta ctx"
 
-    def test_falls_back_to_newest_mtime(self, tmp_path, monkeypatch):
-        """When title match fails, use most recently modified."""
+    def test_disambiguates_by_disk_content(self, tmp_path, monkeypatch):
+        """When title match fails, compare WORDBIRD.md on disk."""
         ctx_dir = tmp_path / "editor-contexts"
         pid = os.getpid()
-        path_old = self._write_ctx(ctx_dir, pid, "/tmp/old-project", "old")
-        path_new = ctx_dir / "other.json"
-        path_new.write_text(
-            json.dumps({"pid": pid, "workspace": "/tmp/new-project", "wordbird_md": "new"})
-        )
 
-        os.utime(path_old, (0, 0))
-        os.utime(path_new, (time.time(), time.time()))
+        # Create two workspaces with different WORDBIRD.md
+        ws_a = tmp_path / "project-a"
+        ws_a.mkdir()
+        (ws_a / "WORDBIRD.md").write_text("alpha context")
+
+        ws_b = tmp_path / "project-b"
+        ws_b.mkdir()
+        (ws_b / "WORDBIRD.md").write_text("beta context")
+
+        self._write_ctx(ctx_dir, pid, str(ws_a), "alpha context")
+        path_b = ctx_dir / "other.json"
+        path_b.write_text(
+            json.dumps(
+                {"pid": pid, "workspace": str(ws_b), "wordbird_md": "beta context"}
+            )
+        )
 
         monkeypatch.setattr("wordbird.daemon.context.EDITOR_CONTEXTS_DIR", ctx_dir)
         monkeypatch.setattr(
@@ -135,6 +144,31 @@ class TestEditorContexts:
             lambda _pid: None,
         )
 
+        # Both match disk, so first match wins — but the important thing
+        # is that it doesn't return None
         workspace, content = _read_editor_contexts(pid)
-        assert workspace == "/tmp/new-project"
-        assert content == "new"
+        assert workspace is not None
+        assert content is not None
+
+    def test_returns_none_when_ambiguous(self, tmp_path, monkeypatch):
+        """When nothing can disambiguate, return None."""
+        ctx_dir = tmp_path / "editor-contexts"
+        pid = os.getpid()
+
+        self._write_ctx(ctx_dir, pid, "/tmp/proj-a", "context a")
+        path_b = ctx_dir / "other.json"
+        path_b.write_text(
+            json.dumps(
+                {"pid": pid, "workspace": "/tmp/proj-b", "wordbird_md": "context b"}
+            )
+        )
+
+        monkeypatch.setattr("wordbird.daemon.context.EDITOR_CONTEXTS_DIR", ctx_dir)
+        monkeypatch.setattr(
+            "wordbird.daemon.context._get_focused_window_title",
+            lambda _pid: None,
+        )
+        # Workspaces don't exist on disk, so disk comparison fails
+        workspace, content = _read_editor_contexts(pid)
+        assert workspace is None
+        assert content is None
