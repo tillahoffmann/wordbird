@@ -24,6 +24,7 @@ class Recorder:
         self._lock = threading.Lock()
         self._level: float = 0.0
         self._mic_ready = False
+        self._device_id: int | None = None  # None = system default
 
     @property
     def is_recording(self) -> bool:
@@ -41,12 +42,40 @@ class Recorder:
 
     @property
     def device_name(self) -> str | None:
-        """Name of the current input device."""
+        """Name of the current/selected input device."""
         try:
+            if self._device_id is not None:
+                return sd.query_devices(self._device_id)["name"]
             device = sd.query_devices(kind="input")
             return device["name"] if device else None
         except Exception:
             return None
+
+    def set_device(self, device_id: int | None):
+        """Set the input device. None = system default."""
+        self._device_id = device_id
+
+    @staticmethod
+    def list_input_devices() -> list[dict]:
+        """List available input devices. Returns [{id, name, is_default}]."""
+        try:
+            sd._terminate()
+            sd._initialize()
+            devices = sd.query_devices()
+            default_id = sd.default.device[0]
+            result = []
+            for i, d in enumerate(devices):
+                if d["max_input_channels"] > 0:
+                    result.append(
+                        {
+                            "id": i,
+                            "name": d["name"],
+                            "is_default": i == default_id,
+                        }
+                    )
+            return result
+        except Exception:
+            return []
 
     def start(self):
         """Open the mic and start recording."""
@@ -67,6 +96,7 @@ class Recorder:
 
             try:
                 self._stream = sd.InputStream(
+                    device=self._device_id,
                     samplerate=self.sample_rate,
                     channels=CHANNELS,
                     dtype=DTYPE,

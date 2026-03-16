@@ -100,11 +100,14 @@ class MenuBar(AppKit.NSObject):
         self._on_quit = None
         self._level_callback = None
         self._mic_ready_callback = None
+        self._on_select_mic = None
+        self._list_mics = None
         self._level_timer = None
         self._spinner_idx = 0
         self._state = State.IDLE
         self._status_item = None
         self._menu = None
+        self._mic_submenu = None
         self._periodic_callbacks: list = []
         return self
 
@@ -119,6 +122,12 @@ class MenuBar(AppKit.NSObject):
     @objc.python_method
     def set_mic_ready_callback(self, cb):
         self._mic_ready_callback = cb
+
+    @objc.python_method
+    def set_mic_callbacks(self, list_mics, on_select):
+        """Set callbacks for mic device menu: list_mics() -> list[dict], on_select(device_id)."""
+        self._list_mics = list_mics
+        self._on_select_mic = on_select
 
     @objc.python_method
     def add_periodic_callback(self, cb):
@@ -162,7 +171,18 @@ class MenuBar(AppKit.NSObject):
         settings_item.setTarget_(self)
         self._menu.addItem_(settings_item)
 
+        # Microphone submenu
+        mic_menu_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Microphone", None, ""
+        )
+        self._mic_submenu = AppKit.NSMenu.alloc().init()
+        mic_menu_item.setSubmenu_(self._mic_submenu)
+        self._menu.addItem_(mic_menu_item)
+
         self._menu.addItem_(AppKit.NSMenuItem.separatorItem())
+
+        # Rebuild mic list when menu opens
+        self._menu.setDelegate_(self)
 
         quit_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "Quit wordbird", "quit:", "q"
@@ -265,6 +285,56 @@ class MenuBar(AppKit.NSObject):
         """Generic periodic timer callback — runs all registered callbacks."""
         for cb in self._periodic_callbacks:
             cb()
+
+    def menuNeedsUpdate_(self, menu):
+        """NSMenuDelegate: rebuild the mic submenu when the menu opens."""
+        if self._mic_submenu is None or self._list_mics is None:
+            return
+        self._mic_submenu.removeAllItems()
+        try:
+            devices, selected_id = self._list_mics()
+        except Exception:
+            devices, selected_id = [], None
+
+        if not devices:
+            item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "No input devices", None, ""
+            )
+            item.setEnabled_(False)
+            self._mic_submenu.addItem_(item)
+            return
+
+        # "System Default" option
+        default_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "System Default", "selectMic:", ""
+        )
+        default_item.setTarget_(self)
+        default_item.setTag_(-1)
+        if selected_id is None:
+            default_item.setState_(AppKit.NSOnState)
+        self._mic_submenu.addItem_(default_item)
+        self._mic_submenu.addItem_(AppKit.NSMenuItem.separatorItem())
+
+        for dev in devices:
+            title = dev["name"]
+            if dev["is_default"]:
+                title += " ★"
+            item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                title, "selectMic:", ""
+            )
+            item.setTarget_(self)
+            item.setTag_(dev["id"])
+            if selected_id == dev["id"]:
+                item.setState_(AppKit.NSOnState)
+            self._mic_submenu.addItem_(item)
+
+    def selectMic_(self, sender):
+        """Handle mic selection from submenu."""
+        device_id = sender.tag()
+        if device_id == -1:
+            device_id = None
+        if self._on_select_mic:
+            self._on_select_mic(device_id)
 
     def copyLast_(self, sender):
         from wordbird.server.history import recent

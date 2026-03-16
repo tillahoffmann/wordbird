@@ -88,6 +88,13 @@ class Daemon:
         self.menubar.set_on_quit(self._on_quit)
         self.menubar.set_level_callback(lambda: self.recorder.level)
         self.menubar.set_mic_ready_callback(lambda: self.recorder.mic_ready)
+        self.menubar.set_mic_callbacks(
+            list_mics=lambda: (
+                Recorder.list_input_devices(),
+                self.recorder._device_id,
+            ),
+            on_select=self.recorder.set_device,
+        )
         self.overlay = Overlay.alloc().init()
         self.overlay.set_level_callback(lambda: self.recorder.level)
         self.overlay.set_mic_ready_callback(lambda: self.recorder.mic_ready)
@@ -409,9 +416,10 @@ class Daemon:
                 self._stop_and_transcribe(submit=True)
                 return None
 
-            # Escape aborts (but don't swallow it)
+            # Escape aborts and swallow the key
             if keycode == 53 and (self.recorder.is_recording or self._transcribing):
                 self._abort()
+                return None
 
         return event
 
