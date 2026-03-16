@@ -8,29 +8,6 @@ from mlx_lm import generate, load
 
 from wordbird.prompt import DEFAULT_FIX_MODEL, DEFAULT_PROMPT, parse_wordbird_md
 
-
-def _resolve_model_path(model_id: str) -> str:
-    """Resolve a HuggingFace model ID to its local cache path.
-
-    Uses try_to_load_from_cache first (no tqdm, no semaphores).
-    Falls back to snapshot_download only if not cached yet.
-    """
-    from pathlib import Path
-
-    if Path(model_id).is_dir():
-        return model_id
-
-    from huggingface_hub import try_to_load_from_cache
-
-    cached = try_to_load_from_cache(model_id, "config.json")
-    if cached:
-        return str(Path(cached).parent)
-
-    # Not cached — download (only happens once, first run)
-    from huggingface_hub import snapshot_download
-
-    return snapshot_download(model_id)
-
 _md = MarkdownIt()
 
 
@@ -93,11 +70,7 @@ class PostProcessor:
         self._tokenizer = None
         gc.collect()
         mx.clear_cache()
-        # Resolve to local cache path to avoid huggingface_hub's
-        # snapshot_download, which uses tqdm and creates multiprocessing
-        # semaphores that leak on SIGTERM.
-        local_path = _resolve_model_path(model_id)
-        result = load(local_path)
+        result = load(model_id)
         self._model, self._tokenizer = result[0], result[1]
         self._loaded_model_id = model_id
         print("   ✨ Post-processor ready.")

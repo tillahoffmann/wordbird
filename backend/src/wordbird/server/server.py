@@ -2,8 +2,22 @@
 
 import os
 import sys
+import threading
 import webbrowser
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
+
+# Patch tqdm's ensure_lock to use a threading lock instead of a multiprocessing
+# lock. The multiprocessing lock creates a POSIX semaphore that leaks on SIGTERM.
+# We only use threads (not forked processes), so a threading lock is correct.
+import tqdm.contrib.concurrent
+
+
+@contextmanager
+def _thread_ensure_lock(tqdm_class, lock_name=""):
+    yield threading.RLock()
+
+
+tqdm.contrib.concurrent.ensure_lock = _thread_ensure_lock
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, UploadFile
