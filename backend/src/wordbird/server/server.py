@@ -1,23 +1,8 @@
 """FastAPI server for wordbird — API + ML inference + static frontend."""
 
-import os
 import sys
-import threading
 import webbrowser
-from contextlib import asynccontextmanager, contextmanager
-
-# Patch tqdm's ensure_lock to use a threading lock instead of a multiprocessing
-# lock. The multiprocessing lock creates a POSIX semaphore that leaks on SIGTERM.
-# We only use threads (not forked processes), so a threading lock is correct.
-import tqdm.contrib.concurrent
-
-
-@contextmanager
-def _thread_ensure_lock(tqdm_class, lock_name=""):
-    yield threading.RLock()
-
-
-tqdm.contrib.concurrent.ensure_lock = _thread_ensure_lock
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, UploadFile
@@ -77,9 +62,24 @@ class HistoryRecord(BaseModel):
 
 
 def create_app() -> FastAPI:
+    # Patch tqdm's ensure_lock to use a threading lock instead of a multiprocessing
+    # lock. The multiprocessing lock creates a POSIX semaphore that leaks on SIGTERM.
+    # Must be inside create_app (not module level) so importing this module for
+    # tests doesn't spawn a resource tracker process that hangs pytest.
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from contextlib import contextmanager
+
+    import tqdm.contrib.concurrent
+
+    @contextmanager
+    def _thread_ensure_lock(tqdm_class, lock_name=""):
+        yield threading.RLock()
+
+    tqdm.contrib.concurrent.ensure_lock = _thread_ensure_lock
+
     # ML models — shared state, all inference runs on a single dedicated thread
     # to avoid creating multiple loky worker pools
-    from concurrent.futures import ThreadPoolExecutor
 
     _ml_state: dict = {"transcriber": None, "postprocessor": None}
     _ml_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ml")
@@ -364,7 +364,6 @@ def start_server(wait: bool = True, timeout: float = 120) -> tuple:
     writes server.json for the daemon, and waits for the health endpoint.
     """
     import subprocess
-    import sys
     import time
 
     import httpx

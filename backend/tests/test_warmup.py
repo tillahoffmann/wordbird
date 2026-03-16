@@ -30,7 +30,9 @@ class FakeRecorder:
         self.is_recording = True
         self._started = True
         if self._ready_delay > 0:
-            threading.Timer(self._ready_delay, self._become_ready).start()
+            t = threading.Timer(self._ready_delay, self._become_ready)
+            t.daemon = True
+            t.start()
         else:
             self._mic_ready = True
 

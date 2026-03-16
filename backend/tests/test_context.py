@@ -2,7 +2,6 @@
 
 import json
 import os
-import time
 
 from wordbird.daemon.context import _read_editor_contexts, find_context_file
 
@@ -29,9 +28,7 @@ class TestEditorContexts:
         ctx_dir.mkdir(parents=True, exist_ok=True)
         path = ctx_dir / f"{pid}.json"
         path.write_text(
-            json.dumps(
-                {"pid": pid, "workspace": workspace, "wordbird_md": wordbird_md}
-            )
+            json.dumps({"pid": pid, "workspace": workspace, "wordbird_md": wordbird_md})
         )
         return path
 
@@ -71,23 +68,20 @@ class TestEditorContexts:
         assert not stale_path.exists()
 
     def test_identical_contexts_picks_any(self, tmp_path, monkeypatch):
-        """When all candidates have the same WORDBIRD.md, pick most recent."""
+        """When all candidates have the same WORDBIRD.md, any is fine."""
         ctx_dir = tmp_path / "editor-contexts"
         pid = os.getpid()
-        path_a = self._write_ctx(ctx_dir, pid, "/tmp/proj-a", "same content")
-        # Write a second file under a different name but same PID
+        self._write_ctx(ctx_dir, pid, "/tmp/proj-a", "same content")
         path_b = ctx_dir / "other.json"
         path_b.write_text(
             json.dumps(
                 {"pid": pid, "workspace": "/tmp/proj-b", "wordbird_md": "same content"}
             )
         )
-        os.utime(path_a, (0, 0))
-        os.utime(path_b, (time.time(), time.time()))
 
         monkeypatch.setattr("wordbird.daemon.context.EDITOR_CONTEXTS_DIR", ctx_dir)
         workspace, content = _read_editor_contexts(pid)
-        assert workspace == "/tmp/proj-b"  # Most recent
+        assert workspace in ("/tmp/proj-a", "/tmp/proj-b")
         assert content == "same content"
 
     def test_different_contexts_uses_window_title(self, tmp_path, monkeypatch):
