@@ -17,6 +17,7 @@ from AppKit import (
     NSImage,
     NSImageSymbolConfiguration,
     NSImageView,
+    NSLineBreakByTruncatingTail,
     NSScreen,
     NSTextAlignmentCenter,
     NSTextField,
@@ -122,13 +123,15 @@ class Overlay(Foundation.NSObject):
 
         # Center label
         self._label = NSTextField.labelWithString_("")
-        self._label.setFrame_(((0, (PILL_H - 18) / 2), (PILL_W, 18)))
+        # Leave space for icon (left 32px) and cancel button (right 28px)
+        self._label.setFrame_(((32, (PILL_H - 18) / 2), (PILL_W - 60, 18)))
         self._label.setAlignment_(NSTextAlignmentCenter)
         self._label.setFont_(NSFont.systemFontOfSize_weight_(13, NSFontWeightMedium))
         self._label.setTextColor_(NSColor.whiteColor())
         self._label.setBackgroundColor_(NSColor.clearColor())
         self._label.setBezeled_(False)
         self._label.setEditable_(False)
+        self._label.setLineBreakMode_(NSLineBreakByTruncatingTail)
         content.addSubview_(self._label)
 
         # Recording timer (next to record icon)
@@ -237,6 +240,8 @@ class Overlay(Foundation.NSObject):
 
     def doShowConnecting_(self, _):
         self._stop_timer()
+        name = getattr(self, "_connecting_mic_name", "Mic")
+        self._show_pill("mic.fill", f"Connecting {name}", YELLOW, cancellable=True)
         self._show_window()
         self._start_timer(0.1, "tickConnecting:")
 
@@ -246,7 +251,7 @@ class Overlay(Foundation.NSObject):
             self.doShowRecording_(None)
             return
         name = getattr(self, "_connecting_mic_name", "Mic")
-        self._show_pill("mic.fill", name, YELLOW, cancellable=True)
+        self._show_pill("mic.fill", f"Connecting {name}", YELLOW, cancellable=True)
         alpha = 0.7 + 0.3 * math.sin(self._tick * 0.33)
         self._icon_view.setAlphaValue_(alpha)
         self._tick += 1
