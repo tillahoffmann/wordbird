@@ -97,6 +97,7 @@ class Recorder:
             self._chunks = []
             self._level = 0.0
             self._mic_ready = False
+            self._first_audio_chunk: int | None = None
 
             # Reinitialize PortAudio to pick up device changes
             # (e.g., AirPods connecting, USB mic plugging in)
@@ -137,6 +138,12 @@ class Recorder:
         if not chunks:
             return b"", 0.0
 
+        # Drop leading silence (chunks before first non-zero audio)
+        start = self._first_audio_chunk or 0
+        chunks = chunks[start:]
+        if not chunks:
+            return b"", 0.0
+
         audio = np.concatenate(chunks, axis=0)
         duration = len(audio) / self.sample_rate
         return self._to_wav_bytes(audio), duration
@@ -147,6 +154,7 @@ class Recorder:
         self._level = min(rms * 6.0, 1.0)
         if not self._mic_ready and rms > 0:
             self._mic_ready = True
+            self._first_audio_chunk = len(self._chunks)
         if self._recording:
             self._chunks.append(chunk)
 
