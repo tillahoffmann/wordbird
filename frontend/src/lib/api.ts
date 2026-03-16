@@ -6,6 +6,7 @@ export interface Transcription {
   app_name: string | null
   duration_seconds: number | null
   cwd: string | null
+  audio_filename: string | null
 }
 
 export interface Stats {
@@ -22,6 +23,7 @@ export interface ConfigData {
   no_fix: boolean
   sound: boolean
   submit_with_return: boolean
+  save_audio: boolean
 }
 
 export interface ConfigResponse {

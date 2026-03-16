@@ -43,6 +43,7 @@ class ConfigUpdate(BaseModel):
     no_fix: bool = False
     sound: bool = True
     submit_with_return: bool = False
+    save_audio: bool = False
 
 
 class PostProcessRequest(BaseModel):
@@ -59,6 +60,7 @@ class HistoryRecord(BaseModel):
     transcription_model: str | None = None
     fix_model: str | None = None
     word_count: int | None = None
+    audio_filename: str | None = None
 
 
 def create_app() -> FastAPI:
@@ -325,6 +327,17 @@ def create_app() -> FastAPI:
         }
 
     # Serve the React frontend (static files) — must be last
+    @app.get("/audio/{filename}")
+    def serve_audio(filename: str):
+        from fastapi.responses import FileResponse
+
+        audio_path = bw_config.AUDIO_DIR / filename
+        if not audio_path.is_file():
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=404, detail="Audio not found")
+        return FileResponse(str(audio_path), media_type="audio/ogg")
+
     frontend_dist = PACKAGE_DIR / "static"
     if frontend_dist.is_dir():
         app.mount(

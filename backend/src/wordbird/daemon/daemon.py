@@ -1,7 +1,10 @@
 """Daemon that handles hotkeys, recording, and UI — delegates transcription to the server."""
 
+import io
 import signal
 import threading
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import AppKit
@@ -10,7 +13,7 @@ import httpx
 import objc
 import Quartz
 
-from wordbird.config import CONFIG_PATH, KEY_LABELS
+from wordbird.config import AUDIO_DIR, CONFIG_PATH, KEY_LABELS
 from wordbird.daemon.menubar import MenuBar, State
 from wordbird.daemon.overlay import Overlay
 from wordbird.daemon.recorder import Recorder
@@ -141,6 +144,7 @@ class Daemon:
         self._no_fix = cfg.get("no_fix", False)
         self._sound = cfg.get("sound", True)
         self._submit_with_return = cfg.get("submit_with_return", False)
+        self._save_audio = cfg.get("save_audio", False)
         self.recorder.set_device_by_name(cfg.get("mic_device"))
         print(f"   🔄 Config reloaded: {self._modifier_label} + {self._toggle_label}")
 
@@ -338,6 +342,36 @@ class Daemon:
                 press_return()
             self.overlay.show_done(word_count)
 
+            # Save audio if enabled
+            audio_filename = None
+            if self._save_audio:
+                try:
+                    import numpy as np
+                    import soundfile as sf
+
+                    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+                    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+                    audio_filename = f"{ts}_{uuid.uuid4().hex[:8]}.ogg"
+                    audio_path = AUDIO_DIR / audio_filename
+
+                    # Decode WAV bytes and write as OGG
+                    import wave
+
+                    with wave.open(io.BytesIO(wav_bytes)) as wf:
+                        frames = wf.readframes(wf.getnframes())
+                        audio_data = np.frombuffer(frames, dtype=np.int16)
+                        sf.write(
+                            str(audio_path),
+                            audio_data,
+                            wf.getframerate(),
+                            format="OGG",
+                            subtype="VORBIS",
+                        )
+                    print(f"   💾 Audio saved: {audio_filename}")
+                except Exception as e:
+                    print(f"   ⚠️  Failed to save audio: {e}")
+                    audio_filename = None
+
             # Record in history via server
             with httpx.Client(timeout=10) as client:
                 client.post(
@@ -351,6 +385,7 @@ class Daemon:
                         "transcription_model": transcription_model,
                         "fix_model": fix_model,
                         "word_count": word_count,
+                        "audio_filename": audio_filename,
                     },
                 )
         except Exception as e:

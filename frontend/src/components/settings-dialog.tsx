@@ -173,6 +173,17 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               )
             </Label>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="save_audio"
+              checked={config.save_audio}
+              onCheckedChange={(checked) =>
+                setConfig({ ...config, save_audio: checked === true })
+              }
+            />
+            <Label htmlFor="save_audio">Save audio recordings</Label>
+          </div>
         </div>
         <DialogFooter>
           <Button onClick={handleSave} disabled={saving} className="w-full">

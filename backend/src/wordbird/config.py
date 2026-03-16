@@ -88,7 +88,10 @@ DEFAULTS = {
     "sound": True,
     "submit_with_return": False,
     "mic_device": None,
+    "save_audio": False,
 }
+
+AUDIO_DIR = DATA_DIR / "audio"
 
 DEFAULT_CONFIG_TOML = """\
 # Wordbird configuration

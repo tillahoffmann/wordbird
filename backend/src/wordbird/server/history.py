@@ -41,6 +41,12 @@ def _connect() -> sqlite3.Connection:
                 "UPDATE transcriptions SET word_count = ? WHERE id = ?", (wc, row_id)
             )
         conn.commit()
+    # Add audio_filename column if missing
+    try:
+        conn.execute("SELECT audio_filename FROM transcriptions LIMIT 0")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE transcriptions ADD COLUMN audio_filename TEXT")
+        conn.commit()
     return conn
 
 
@@ -53,6 +59,7 @@ def record(
     transcription_model: str | None = None,
     fix_model: str | None = None,
     word_count: int | None = None,
+    audio_filename: str | None = None,
 ):
     """Record a transcription in the database."""
     conn = _connect()
@@ -61,8 +68,9 @@ def record(
             """\
             INSERT INTO transcriptions
                 (timestamp, raw_text, fixed_text, app_name, cwd,
-                 duration_seconds, transcription_model, fix_model, word_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 duration_seconds, transcription_model, fix_model,
+                 word_count, audio_filename)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 datetime.now(timezone.utc).isoformat(),
@@ -74,6 +82,7 @@ def record(
                 transcription_model,
                 fix_model,
                 word_count,
+                audio_filename,
             ),
         )
         conn.commit()

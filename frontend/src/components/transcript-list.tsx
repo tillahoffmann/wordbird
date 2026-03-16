@@ -106,6 +106,14 @@ function TranscriptItem({ t, onDelete }: { t: Transcription; onDelete?: () => vo
           <span className="text-xs text-muted-foreground/50 italic">Not post-processed</span>
         )}
       </div>
+      {t.audio_filename && (
+        <audio
+          controls
+          preload="none"
+          className="mt-2 h-8 w-full"
+          src={`/audio/${t.audio_filename}`}
+        />
+      )}
     </div>
   )
 }

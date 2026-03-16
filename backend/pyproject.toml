@@ -8,6 +8,7 @@ requires-python = ">=3.10"
 dependencies = [
     "mlx-audio",
     "sounddevice",
+    "soundfile",
     "numpy",
     "pyobjc-core",
     "pyobjc-framework-Cocoa",
