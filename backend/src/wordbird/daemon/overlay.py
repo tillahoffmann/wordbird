@@ -270,6 +270,7 @@ class Overlay(Foundation.NSObject):
 
     def doShowRecording_(self, _):
         self._stop_timer()
+        self._icon_view.setAlphaValue_(1.0)
         self._level_history.clear()
         self._level_history.extend([0.0] * NUM_BARS)
         self._show_window()
