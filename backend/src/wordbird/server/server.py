@@ -3,15 +3,6 @@
 import os
 import sys
 import webbrowser
-
-# Prevent tqdm from creating a multiprocessing lock. huggingface_hub uses
-# tqdm.contrib.concurrent.thread_map for downloads, which creates an RLock
-# with a POSIX semaphore. On SIGTERM (e.g., uvicorn --reload), the process
-# dies before the semaphore can be unlinked, causing resource tracker warnings.
-# Setting mp_lock to None uses tqdm's own guard: `if not hasattr(cls, 'mp_lock')`.
-import tqdm.std
-
-tqdm.std.TqdmDefaultWriteLock.mp_lock = None
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -106,16 +97,11 @@ def create_app() -> FastAPI:
     _cleaned_up = False
 
     def _cleanup():
-        """Release ML models and worker pools."""
-        nonlocal _cleaned_up
-        if _cleaned_up:
-            return
-        _cleaned_up = True
-
-        import gc
-
+        """Release ML models and GPU memory."""
         _ml_executor.shutdown(wait=False)
         try:
+            import gc
+
             import mlx.core as mx
 
             mx.synchronize()
@@ -125,13 +111,6 @@ def create_app() -> FastAPI:
             mx.clear_cache()
         except Exception:
             pass
-        try:
-            from joblib.externals.loky import get_reusable_executor
-
-            get_reusable_executor().shutdown(wait=False, kill_workers=True)
-        except Exception:
-            pass
-        gc.collect()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
