@@ -327,16 +327,13 @@ def create_app() -> FastAPI:
         }
 
     # Serve the React frontend (static files) — must be last
-    @app.get("/audio/{filename}")
-    def serve_audio(filename: str):
-        from fastapi.responses import FileResponse
-
-        audio_path = bw_config.AUDIO_DIR / filename
-        if not audio_path.is_file():
-            from fastapi import HTTPException
-
-            raise HTTPException(status_code=404, detail="Audio not found")
-        return FileResponse(str(audio_path), media_type="audio/ogg")
+    # Serve saved audio recordings
+    bw_config.AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/audio",
+        StaticFiles(directory=str(bw_config.AUDIO_DIR)),
+        name="audio",
+    )
 
     frontend_dist = PACKAGE_DIR / "static"
     if frontend_dist.is_dir():
