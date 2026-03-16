@@ -11,6 +11,7 @@ SAMPLE_RATE = 16000
 CHANNELS = 1
 DTYPE = "float32"
 BLOCK_SIZE = 1024
+MIC_READY_CONSECUTIVE = 3  # consecutive real-data chunks before mic is "ready"
 
 
 class Recorder:
@@ -24,6 +25,7 @@ class Recorder:
         self._lock = threading.Lock()
         self._level: float = 0.0
         self._mic_ready = False
+        self._real_data_count: int = 0  # consecutive chunks with real data
         self._device_id: int | None = None  # None = system default
 
     @property
@@ -97,6 +99,7 @@ class Recorder:
             self._chunks = []
             self._level = 0.0
             self._mic_ready = False
+            self._real_data_count = 0
             self._first_audio_chunk: int | None = None
 
             # Reinitialize PortAudio to pick up device changes
@@ -152,9 +155,16 @@ class Recorder:
         chunk = indata.copy()
         rms = float(np.sqrt(np.mean(chunk**2)))
         self._level = min(rms * 6.0, 1.0)
-        if not self._mic_ready and rms > 0:
-            self._mic_ready = True
-            self._first_audio_chunk = len(self._chunks)
+        if not self._mic_ready:
+            # Wait for PortAudio to deliver real data (not underflow zeros)
+            # then require consecutive chunks to filter warmup transients.
+            if status.input_underflow or rms == 0:
+                self._real_data_count = 0
+            else:
+                self._real_data_count += 1
+                if self._real_data_count >= MIC_READY_CONSECUTIVE:
+                    self._mic_ready = True
+                    self._first_audio_chunk = len(self._chunks)
         if self._recording:
             self._chunks.append(chunk)
 
