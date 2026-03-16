@@ -3,7 +3,6 @@ name: CI / Publish
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -20,7 +19,7 @@ jobs:
       - run: uv run pytest tests/ -v
 
   publish-pypi:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: check
     runs-on: ubuntu-latest
     environment: pypi
@@ -42,9 +41,10 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: backend/dist
+          skip-existing: true
 
   publish-vscode:
-    if: false  # TODO: enable once VSCE_PAT secret is configured
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: check
     runs-on: ubuntu-latest
     defaults:
@@ -57,6 +57,6 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npx tsc
-      - run: npx vsce publish
+      - run: npx vsce publish --skip-duplicate
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
