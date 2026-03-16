@@ -12,14 +12,14 @@ repos:
     hooks:
       - id: backend-tests
         name: backend tests
-        entry: bash -c 'cd backend && uv run pytest tests/ -x -q'
+        entry: bash -c 'cd backend && uv run --no-sync pytest tests/ -x -q'
         language: system
         files: ^backend/
         pass_filenames: false
 
       - id: backend-type-check
         name: backend type check
-        entry: bash -c 'cd backend && uv run pyright'
+        entry: bash -c 'cd backend && uv run --no-sync pyright'
         language: system
         files: ^backend/.*\.py$
         pass_filenames: false
