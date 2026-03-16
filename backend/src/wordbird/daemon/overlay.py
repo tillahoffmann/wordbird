@@ -56,7 +56,7 @@ GREEN = _rgb(100, 220, 100)
 BLUE = _rgb(100, 180, 255)
 
 PILL_W, PILL_H = 250, 36
-NUM_BARS = 20
+NUM_BARS = 19
 BAR_W, BAR_GAP = 4, 3
 MAX_BAR_H = 20
 
@@ -123,8 +123,8 @@ class Overlay(Foundation.NSObject):
 
         # Center label
         self._label = NSTextField.labelWithString_("")
-        # Leave space for icon (left 32px) and cancel button (right 28px)
-        self._label.setFrame_(((32, (PILL_H - 18) / 2), (PILL_W - 60, 18)))
+        # Leave space for icon (left 32px) and cancel button (right 36px)
+        self._label.setFrame_(((32, (PILL_H - 18) / 2), (PILL_W - 68, 18)))
         self._label.setAlignment_(NSTextAlignmentCenter)
         self._label.setFont_(NSFont.systemFontOfSize_weight_(13, NSFontWeightMedium))
         self._label.setTextColor_(NSColor.whiteColor())
@@ -161,7 +161,7 @@ class Overlay(Foundation.NSObject):
 
         # Stop button (right side)
         self._stop_button = NSButton.alloc().initWithFrame_(
-            ((PILL_W - 28, (PILL_H - 20) / 2), (20, 20))
+            ((PILL_W - 32, (PILL_H - 20) / 2), (20, 20))
         )
         self._stop_button.setImage_(
             _sf_image("xmark.circle.fill", size=14, color=_rgb(180, 180, 180))
