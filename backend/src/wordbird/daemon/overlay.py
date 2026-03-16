@@ -55,7 +55,7 @@ RED = _rgb(255, 56, 60)
 GREEN = _rgb(100, 220, 100)
 BLUE = _rgb(100, 180, 255)
 
-PILL_W, PILL_H = 220, 36
+PILL_W, PILL_H = 250, 36
 NUM_BARS = 20
 BAR_W, BAR_GAP = 3, 2
 MAX_BAR_H = 20

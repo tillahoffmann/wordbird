@@ -208,13 +208,13 @@ class Daemon:
                     print(f"   ❌ Mic ({mic}) did not produce audio within 5 seconds.")
                     self.recorder.stop()
                     self.menubar.set_state(State.IDLE)
-                    self.overlay.show_error(f"Unresponsive: {mic}")
+                    self.overlay.show_error(f"Unresponsive {mic}")
                     return
                 time.sleep(0.05)
             if self.recorder.is_recording:
                 self.menubar.set_state(State.LISTENING)
                 mic = self.recorder.device_name or "unknown"
-                print(f"   🎤 Listening: {mic}")
+                print(f"   🎤 Listening {mic}")
                 if self._sound:
                     subprocess.Popen(
                         ["afplay", _BONG_PATH],
