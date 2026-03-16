@@ -141,6 +141,7 @@ class Daemon:
         self._no_fix = cfg.get("no_fix", False)
         self._sound = cfg.get("sound", True)
         self._submit_with_return = cfg.get("submit_with_return", False)
+        self.recorder.set_device_by_name(cfg.get("mic_device"))
         print(f"   🔄 Config reloaded: {self._modifier_label} + {self._toggle_label}")
 
     def _toggle_recording(self):
@@ -207,7 +208,7 @@ class Daemon:
                     print(f"   ❌ Mic ({mic}) did not produce audio within 5 seconds.")
                     self.recorder.stop()
                     self.menubar.set_state(State.IDLE)
-                    self.overlay.show_error("Mic not responding")
+                    self.overlay.show_error(f"{mic} not responding")
                     return
                 time.sleep(0.05)
             if self.recorder.is_recording:

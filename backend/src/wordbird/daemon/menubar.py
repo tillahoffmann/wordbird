@@ -304,9 +304,10 @@ class MenuBar(AppKit.NSObject):
             self._mic_submenu.addItem_(item)
             return
 
-        # "System Default" option
+        # "System Default" option — star indicates it adapts to OS settings
+        default_name = next((d["name"] for d in devices if d["is_default"]), "unknown")
         default_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-            "System Default", "selectMic:", ""
+            f"System Default ({default_name}) ★", "selectMic:", ""
         )
         default_item.setTarget_(self)
         default_item.setTag_(-1)
@@ -316,11 +317,8 @@ class MenuBar(AppKit.NSObject):
         self._mic_submenu.addItem_(AppKit.NSMenuItem.separatorItem())
 
         for dev in devices:
-            title = dev["name"]
-            if dev["is_default"]:
-                title += " ★"
             item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-                title, "selectMic:", ""
+                dev["name"], "selectMic:", ""
             )
             item.setTarget_(self)
             item.setTag_(dev["id"])
@@ -329,12 +327,29 @@ class MenuBar(AppKit.NSObject):
             self._mic_submenu.addItem_(item)
 
     def selectMic_(self, sender):
-        """Handle mic selection from submenu."""
+        """Handle mic selection from submenu — persist to config."""
         device_id = sender.tag()
         if device_id == -1:
             device_id = None
         if self._on_select_mic:
             self._on_select_mic(device_id)
+
+        # Persist: store device name (not ID, since IDs change)
+        try:
+            import sounddevice as sd
+            import tomli_w
+
+            from wordbird.config import CONFIG_PATH, load_config
+
+            cfg = load_config()
+            if device_id is not None:
+                cfg["mic_device"] = sd.query_devices(device_id)["name"]
+            else:
+                cfg.pop("mic_device", None)
+            with CONFIG_PATH.open("wb") as f:
+                tomli_w.dump(cfg, f)
+        except Exception:
+            pass
 
     def copyLast_(self, sender):
         from wordbird.server.history import recent

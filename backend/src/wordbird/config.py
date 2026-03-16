@@ -87,6 +87,7 @@ DEFAULTS = {
     "no_fix": False,
     "sound": True,
     "submit_with_return": False,
+    "mic_device": None,
 }
 
 DEFAULT_CONFIG_TOML = """\

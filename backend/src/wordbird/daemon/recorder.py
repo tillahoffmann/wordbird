@@ -52,8 +52,20 @@ class Recorder:
             return None
 
     def set_device(self, device_id: int | None):
-        """Set the input device. None = system default."""
+        """Set the input device by ID. None = system default."""
         self._device_id = device_id
+
+    def set_device_by_name(self, name: str | None):
+        """Set the input device by name. None = system default."""
+        if name is None:
+            self._device_id = None
+            return
+        for dev in self.list_input_devices():
+            if dev["name"] == name:
+                self._device_id = dev["id"]
+                return
+        # Name not found — fall back to default
+        self._device_id = None
 
     @staticmethod
     def list_input_devices() -> list[dict]:
