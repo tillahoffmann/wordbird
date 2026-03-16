@@ -57,7 +57,7 @@ BLUE = _rgb(100, 180, 255)
 
 PILL_W, PILL_H = 250, 36
 NUM_BARS = 20
-BAR_W, BAR_GAP = 3, 2
+BAR_W, BAR_GAP = 4, 3
 MAX_BAR_H = 20
 
 
@@ -222,7 +222,19 @@ class Overlay(Foundation.NSObject):
             bar.setHidden_(True)
 
     @objc.python_method
+    def _reposition(self):
+        """Move the pill to the screen with the key window."""
+        screen = NSScreen.mainScreen()
+        if screen is None:
+            return
+        visible = screen.visibleFrame()
+        x = visible.origin.x + (visible.size.width - PILL_W) / 2
+        y = visible.origin.y + visible.size.height - 50
+        self._window.setFrameOrigin_((x, y))
+
+    @objc.python_method
     def _show_window(self):
+        self._reposition()
         self._window.setAlphaValue_(1.0)
         self._window.orderFrontRegardless()
 
