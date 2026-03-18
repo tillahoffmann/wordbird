@@ -1,6 +1,6 @@
 [project]
 name = "wordbird"
-version = "0.7.1"
+version = "0.8.0"
 description = "Voice dictation daemon using NVIDIA Parakeet on Apple Silicon"
 readme = "README.md"
 license = "MIT"
