@@ -56,6 +56,39 @@ _BONG_PATH = str(_STATIC_DIR / "bong.ogg")
 _TAP_CHECK_INTERVAL = 5.0
 
 
+def _get_system_muted() -> bool | None:
+    """Check if system audio output is muted. Returns None on error."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", "output muted of (get volume settings)"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip() == "true"
+    except Exception:
+        return None
+
+
+def _set_system_muted(muted: bool):
+    """Mute or unmute system audio output."""
+    import subprocess
+
+    try:
+        val = "true" if muted else "false"
+        subprocess.run(
+            ["osascript", "-e", f"set volume output muted {val}"],
+            capture_output=True,
+            timeout=2,
+        )
+    except Exception as e:
+        print(f"   ⚠️  Failed to {'mute' if muted else 'unmute'} audio: {e}")
+
+
 class Daemon:
     """Background dictation daemon.
 
@@ -106,6 +139,7 @@ class Daemon:
         self._modifier_down = False
         self._transcribing = False
         self._cancelled = False
+        self._was_muted: bool | None = None  # saved mute state to restore
         self._tap = None
         self._server_proc = None
         self._config_mtime: float = 0.0
@@ -145,6 +179,7 @@ class Daemon:
         self._sound = cfg.get("sound", True)
         self._submit_with_return = cfg.get("submit_with_return", False)
         self._save_audio = cfg.get("save_audio", False)
+        self._mute_during_recording = cfg.get("mute_during_recording", False)
         self.recorder.set_device_by_name(cfg.get("mic_device"))
         print(f"   🔄 Config reloaded: {self._modifier_label} + {self._toggle_label}")
 
@@ -169,6 +204,12 @@ class Daemon:
             print("   ❌ Server not reachable, cannot record.")
             self.overlay.show_error("Server not reachable")
             return
+
+        # Mute system audio to avoid echo
+        if self._mute_during_recording:
+            self._was_muted = _get_system_muted()
+            if self._was_muted is False:
+                _set_system_muted(True)
 
         self.menubar.set_state(State.CONNECTING)
         self.recorder.start()
@@ -211,6 +252,7 @@ class Daemon:
                     mic = self.recorder.device_name or "unknown"
                     print(f"   ❌ Mic ({mic}) did not produce audio within 5 seconds.")
                     self.recorder.stop()
+                    self._restore_mute()
                     self.menubar.set_state(State.IDLE)
                     self.overlay.show_error(f"Unresponsive {mic}")
                     return
@@ -219,7 +261,7 @@ class Daemon:
                 self.menubar.set_state(State.LISTENING)
                 mic = self.recorder.device_name or "unknown"
                 print(f"   🎤 Listening {mic}")
-                if self._sound:
+                if self._sound and not self._mute_during_recording:
                     subprocess.Popen(
                         ["afplay", _BONG_PATH],
                         stdout=subprocess.DEVNULL,
@@ -237,6 +279,7 @@ class Daemon:
 
         self._submit_after = submit
         print("   ⏹️  Stopped recording.")
+        self._restore_mute()
         wav_bytes, duration = self.recorder.stop()
 
         if not wav_bytes:
@@ -396,10 +439,17 @@ class Daemon:
             self._transcribing = False
             self.menubar.set_state(State.IDLE)
 
+    def _restore_mute(self):
+        """Restore system mute state if we changed it."""
+        if self._was_muted is not None and not self._was_muted:
+            _set_system_muted(False)
+        self._was_muted = None
+
     def _abort(self):
         """Abort recording or transcription."""
         print("   ⛔ Cancelled.")
         self._cancelled = True
+        self._restore_mute()
         if self.recorder.is_recording:
             self.recorder.stop()
         self.menubar.set_state(State.IDLE)
@@ -407,6 +457,7 @@ class Daemon:
 
     def _on_quit(self):
         """Clean up on quit."""
+        self._restore_mute()
         if self.recorder.is_recording:
             self.recorder.stop()
 

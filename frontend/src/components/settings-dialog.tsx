@@ -184,6 +184,17 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             />
             <Label htmlFor="save_audio">Save audio recordings</Label>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="mute_during_recording"
+              checked={config.mute_during_recording}
+              onCheckedChange={(checked) =>
+                setConfig({ ...config, mute_during_recording: checked === true })
+              }
+            />
+            <Label htmlFor="mute_during_recording">Mute audio output while recording</Label>
+          </div>
         </div>
         <DialogFooter>
           <Button onClick={handleSave} disabled={saving} className="w-full">

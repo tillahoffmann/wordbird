@@ -24,6 +24,7 @@ export interface ConfigData {
   sound: boolean
   submit_with_return: boolean
   save_audio: boolean
+  mute_during_recording: boolean
 }
 
 export interface ConfigResponse {

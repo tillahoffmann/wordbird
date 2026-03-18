@@ -89,6 +89,7 @@ DEFAULTS = {
     "submit_with_return": False,
     "mic_device": None,
     "save_audio": False,
+    "mute_during_recording": False,
 }
 
 AUDIO_DIR = DATA_DIR / "audio"

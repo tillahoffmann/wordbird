@@ -44,6 +44,7 @@ class ConfigUpdate(BaseModel):
     sound: bool = True
     submit_with_return: bool = False
     save_audio: bool = False
+    mute_during_recording: bool = False
 
 
 class PostProcessRequest(BaseModel):
