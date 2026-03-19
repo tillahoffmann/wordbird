@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import sqlite3
 import subprocess
 from pathlib import Path
 
@@ -128,6 +129,43 @@ def _get_focused_window_title(pid: int) -> str | None:
         return None
 
 
+ZED_DB_PATH = Path.home() / "Library/Application Support/Zed/db/0-stable/db.sqlite"
+
+
+def _get_zed_workspace(pid: int) -> str | None:
+    """Get the workspace path for the focused Zed window.
+
+    Uses the window title to extract the project name, then looks it up
+    in Zed's workspace SQLite DB to get the full path.
+    """
+    title = _get_focused_window_title(pid)
+    if not title:
+        return None
+
+    # Zed titles: "projectname" or "projectname — filename.ext"
+    project_name = title.split(" \u2014 ")[0].strip()
+    if not project_name:
+        return None
+
+    if not ZED_DB_PATH.exists():
+        return None
+
+    try:
+        uri = f"file:{ZED_DB_PATH}?mode=ro"
+        with sqlite3.connect(uri, uri=True, timeout=1) as conn:
+            row = conn.execute(
+                "SELECT paths FROM workspaces"
+                " WHERE paths LIKE ? ORDER BY timestamp DESC LIMIT 1",
+                (f"%/{project_name}",),
+            ).fetchone()
+        if row:
+            return row[0]
+    except Exception:
+        logger.debug("Failed to query Zed workspace DB", exc_info=True)
+
+    return None
+
+
 def _cleanup_stale_contexts():
     """Remove context files for processes that are no longer running."""
     if not EDITOR_CONTEXTS_DIR.is_dir():
@@ -199,9 +237,10 @@ def _read_editor_contexts(frontmost_pid: int) -> tuple[str | None, str | None]:
     if len(candidates) == 1:
         return candidates[0]
 
-    # Step 3: all WORDBIRD.md contents identical
+    # Step 3: all WORDBIRD.md contents identical AND same workspace
     contents = {c[1] for c in candidates}
-    if len(contents) == 1:
+    workspaces = {c[0] for c in candidates}
+    if len(contents) == 1 and len(workspaces) == 1:
         return candidates[0]
 
     # Step 4: contents differ — match by focused window title
@@ -258,6 +297,21 @@ def get_context() -> tuple[str, str | None, str | None]:
                     context_content = context_file.read_text()
                 except Exception:
                     logger.debug("Failed to read %s", context_file, exc_info=True)
+    elif bundle_id == "dev.zed.Zed":
+        ws = AppKit.NSWorkspace.sharedWorkspace()
+        frontmost_pid = ws.frontmostApplication().processIdentifier()
+        workspace_path = _get_zed_workspace(frontmost_pid)
+        if workspace_path:
+            cwd = workspace_path
+            context_file = find_context_file(workspace_path)
+            if context_file:
+                try:
+                    context_content = context_file.read_text()
+                except Exception:
+                    logger.debug("Failed to read %s", context_file, exc_info=True)
+        else:
+            # Fall through to editor-contexts as backup
+            cwd, context_content = _read_editor_contexts(frontmost_pid)
     else:
         # Try editor-contexts/ (works for any editor with an extension)
         ws = AppKit.NSWorkspace.sharedWorkspace()
