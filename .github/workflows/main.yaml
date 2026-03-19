@@ -17,9 +17,9 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "backend/uv.lock"
-      - run: cp ../README.md .
       - run: uv sync
       - run: uv run pytest tests/ -v
+      - run: rm -f README.md && cp ../README.md README.md && uv build
 
   publish-pypi:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -35,12 +35,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      # Build frontend and bundle into backend
-      - run: cd frontend && npm ci && npm run build
-      - run: cp -r frontend/dist backend/src/wordbird/server/static
-      # Build Python package
-      - run: cp README.md backend/
-      - run: cd backend && uv build
+      - run: cd frontend && npm ci && npm run build && cp -r dist ../backend/src/wordbird/server/static
+      - run: cd backend && cp -L ../README.md README.md && uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: backend/dist
@@ -58,8 +54,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
-      - run: npx tsc
+      - run: npm install && npx tsc
       - run: npx vsce publish --skip-duplicate
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}

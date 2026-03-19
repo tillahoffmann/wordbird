@@ -24,8 +24,10 @@ from AppKit import (
     NSView,
     NSWindow,
     NSWindowCollectionBehaviorCanJoinAllSpaces,
+    NSWindowCollectionBehaviorFullScreenAuxiliary,
     NSWindowCollectionBehaviorStationary,
     NSWindowStyleMaskBorderless,
+    NSWorkspace,
 )
 
 
@@ -366,4 +368,129 @@ class Overlay(Foundation.NSObject):
 
     def doHide_(self, _):
         self._stop_timer()
+        self._window.orderOut_(None)
+
+
+# --- Window highlight border ---
+
+HIGHLIGHT_BORDER = 3
+HIGHLIGHT_CORNER = 10
+HIGHLIGHT_COLOR = Quartz.CGColorCreateGenericRGB(1.0, 0.553, 0.157, 0.65)
+HIGHLIGHT_INSET = 1  # inset so the border sits just inside the window edge
+
+
+def _frontmost_window_bounds():
+    """Return (x, y, w, h) in AppKit coords for the frontmost app's key window.
+
+    Returns None if the window cannot be determined.
+    """
+    app = NSWorkspace.sharedWorkspace().frontmostApplication()
+    if app is None:
+        return None
+    pid = app.processIdentifier()
+
+    windows = Quartz.CGWindowListCopyWindowInfo(
+        Quartz.kCGWindowListOptionOnScreenOnly
+        | Quartz.kCGWindowListExcludeDesktopElements,
+        Quartz.kCGNullWindowID,
+    )
+    if not windows:
+        return None
+
+    for w in windows:
+        if w.get("kCGWindowOwnerPID") == pid and w.get("kCGWindowLayer", -1) == 0:
+            b = w.get("kCGWindowBounds")
+            if b:
+                # Convert CoreGraphics (top-left origin) to AppKit (bottom-left origin)
+                screen_h = NSScreen.mainScreen().frame().size.height
+                x, y, width, height = b["X"], b["Y"], b["Width"], b["Height"]
+                appkit_y = screen_h - y - height
+                return (x, y, width, height, appkit_y)
+    return None
+
+
+class WindowHighlight(Foundation.NSObject):
+    """Subtle border highlight around the target paste window."""
+
+    def init(self):
+        self = objc.super(WindowHighlight, self).init()
+        if self is None:
+            return None
+        self._window = None
+        self._timer = None
+        return self
+
+    @objc.python_method
+    def setup(self):
+        """Create the highlight window. Must be called on the main thread."""
+        self._window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            ((0, 0), (100, 100)),
+            NSWindowStyleMaskBorderless,
+            NSBackingStoreBuffered,
+            False,
+        )
+        self._window.setLevel_(NSFloatingWindowLevel)
+        self._window.setOpaque_(False)
+        self._window.setBackgroundColor_(NSColor.clearColor())
+        self._window.setIgnoresMouseEvents_(True)
+        self._window.setHasShadow_(False)
+        self._window.setCollectionBehavior_(
+            NSWindowCollectionBehaviorCanJoinAllSpaces
+            | NSWindowCollectionBehaviorStationary
+            | NSWindowCollectionBehaviorFullScreenAuxiliary
+        )
+
+        content = self._window.contentView()
+        content.setWantsLayer_(True)
+        layer = content.layer()
+        layer.setBorderWidth_(HIGHLIGHT_BORDER)
+        layer.setBorderColor_(HIGHLIGHT_COLOR)
+        layer.setCornerRadius_(HIGHLIGHT_CORNER)
+        layer.setBackgroundColor_(Quartz.CGColorCreateGenericRGB(0, 0, 0, 0))
+
+    @objc.python_method
+    def _reposition(self):
+        """Move the highlight to match the frontmost window."""
+        bounds = _frontmost_window_bounds()
+        if bounds is None:
+            return
+        x, _, w, h, appkit_y = bounds
+        inset = HIGHLIGHT_INSET
+        self._window.setFrame_display_(
+            ((x + inset, appkit_y + inset), (w - 2 * inset, h - 2 * inset)),
+            True,
+        )
+
+    # --- Public API (safe to call from any thread) ---
+
+    @objc.python_method
+    def show(self):
+        self.performSelectorOnMainThread_withObject_waitUntilDone_(
+            "doShow:", None, False
+        )
+
+    def doShow_(self, _):
+        self._reposition()
+        self._window.setAlphaValue_(1.0)
+        self._window.orderFrontRegardless()
+        # Poll for window movement
+        if self._timer is not None:
+            self._timer.invalidate()
+        self._timer = Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            0.2, self, "tickReposition:", None, True
+        )
+
+    def tickReposition_(self, timer):
+        self._reposition()
+
+    @objc.python_method
+    def hide(self):
+        self.performSelectorOnMainThread_withObject_waitUntilDone_(
+            "doHide:", None, False
+        )
+
+    def doHide_(self, _):
+        if self._timer is not None:
+            self._timer.invalidate()
+            self._timer = None
         self._window.orderOut_(None)
