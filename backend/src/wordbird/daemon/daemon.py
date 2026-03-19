@@ -15,7 +15,7 @@ import Quartz
 
 from wordbird.config import AUDIO_DIR, CONFIG_PATH, KEY_LABELS
 from wordbird.daemon.menubar import MenuBar, State
-from wordbird.daemon.overlay import Overlay
+from wordbird.daemon.overlay import Overlay, WindowHighlight
 from wordbird.daemon.recorder import Recorder
 from wordbird.daemon.typer import press_return, type_text
 
@@ -135,6 +135,7 @@ class Daemon:
         self.overlay.set_level_callback(lambda: self.recorder.level)
         self.overlay.set_mic_ready_callback(lambda: self.recorder.mic_ready)
         self.overlay.set_cancel_callback(self._abort)
+        self.highlight = WindowHighlight.alloc().init()
 
         self._modifier_down = False
         self._transcribing = False
@@ -211,6 +212,7 @@ class Daemon:
             if self._was_muted is False:
                 _set_system_muted(True)
 
+        self.highlight.show()
         self.menubar.set_state(State.CONNECTING)
         self.recorder.start()
         mic = self.recorder.device_name or "Mic"
@@ -252,6 +254,7 @@ class Daemon:
                     mic = self.recorder.device_name or "unknown"
                     print(f"   ❌ Mic ({mic}) did not produce audio within 5 seconds.")
                     self.recorder.stop()
+                    self.highlight.hide()
                     self._restore_mute()
                     self.menubar.set_state(State.IDLE)
                     self.overlay.show_error(f"Unresponsive {mic}")
@@ -279,6 +282,7 @@ class Daemon:
 
         self._submit_after = submit
         print("   ⏹️  Stopped recording.")
+        self.highlight.hide()
         self._restore_mute()
         wav_bytes, duration = self.recorder.stop()
 
@@ -449,6 +453,7 @@ class Daemon:
         """Abort recording or transcription."""
         print("   ⛔ Cancelled.")
         self._cancelled = True
+        self.highlight.hide()
         self._restore_mute()
         if self.recorder.is_recording:
             self.recorder.stop()
@@ -457,6 +462,7 @@ class Daemon:
 
     def _on_quit(self):
         """Clean up on quit."""
+        self.highlight.hide()
         self._restore_mute()
         if self.recorder.is_recording:
             self.recorder.stop()
@@ -524,6 +530,7 @@ class Daemon:
 
         self.menubar.setup()
         self.overlay.setup()
+        self.highlight.setup()
 
         # Verify the server is reachable before accepting hotkeys
         print(f"\n   🔗 Checking server at {self._server_url}...")
