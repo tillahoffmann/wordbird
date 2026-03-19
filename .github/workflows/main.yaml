@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: 20
       - run: cd frontend && npm ci && npm run build && cp -r dist ../backend/src/wordbird/server/static
-      - run: cd backend && cp -L ../README.md README.md && uv build
+      - run: cd backend && rm -f README.md && cp ../README.md README.md && uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: backend/dist
