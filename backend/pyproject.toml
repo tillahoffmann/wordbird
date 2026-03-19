@@ -1,12 +1,14 @@
 [project]
 name = "wordbird"
-version = "0.4.2"
+version = "0.8.0"
 description = "Voice dictation daemon using NVIDIA Parakeet on Apple Silicon"
+readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "mlx-audio",
     "sounddevice",
+    "soundfile",
     "numpy",
     "pyobjc-core",
     "pyobjc-framework-Cocoa",
@@ -18,6 +20,7 @@ dependencies = [
     "uvicorn[standard]",
     "httpx",
     "markdown-it-py",
+    "tomli-w",
     "tomli; python_version < '3.11'",
 ]
 
@@ -41,6 +44,10 @@ packages = ["src/wordbird"]
 wordbird = "wordbird.cli:main"
 wordbird-server = "wordbird.cli:server_main"
 wordbird-daemon = "wordbird.cli:daemon_main"
+
+[tool.pytest.ini_options]
+markers = ["slow: tests that download and load ML models"]
+addopts = "-m 'not slow'"
 
 [tool.ruff.lint]
 extend-select = ["I"]

@@ -8,7 +8,7 @@ from wordbird.config import DEFAULTS, resolve
 @pytest.fixture
 def config_dir(tmp_path, monkeypatch):
     """Point config to a temp directory."""
-    monkeypatch.setattr("wordbird.config.CONFIG_PATH", str(tmp_path / "wordbird.toml"))
+    monkeypatch.setattr("wordbird.config.CONFIG_PATH", tmp_path / "wordbird.toml")
     return tmp_path
 
 

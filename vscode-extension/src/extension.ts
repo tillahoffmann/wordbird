@@ -3,11 +3,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-const CONTEXT_PATH = path.join(
-  os.homedir(),
-  ".wordbird",
-  "vscode-context.json"
-);
+const CONTEXTS_DIR = path.join(os.homedir(), ".wordbird", "editor-contexts");
+const CONTEXT_PATH = path.join(CONTEXTS_DIR, `${process.pid}.json`);
 
 interface WordbirdContext {
   pid: number;
@@ -18,10 +15,8 @@ interface WordbirdContext {
 let fileWatcher: vscode.FileSystemWatcher | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
-  // Write context on activation (fire-and-forget with error handling)
   writeContext().catch(() => {});
 
-  // Update on window focus
   context.subscriptions.push(
     vscode.window.onDidChangeWindowState((e) => {
       if (e.focused) {
@@ -30,7 +25,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Update when workspace folders change
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       setupFileWatcher(context);
@@ -38,7 +32,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Watch WORDBIRD.md for changes
   setupFileWatcher(context);
 }
 
@@ -81,8 +74,7 @@ async function writeContext(): Promise<void> {
       wordbird_md: wordbirdMd,
     };
 
-    const dir = path.dirname(CONTEXT_PATH);
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(CONTEXTS_DIR, { recursive: true });
     fs.writeFileSync(
       CONTEXT_PATH,
       JSON.stringify(ctx, null, 2) + "\n",

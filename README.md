@@ -75,11 +75,14 @@ The file is a [Jinja template](https://jinja.palletsprojects.com/). `{{ transcri
 | Action | Default |
 |---|---|
 | Toggle recording | Right ⌘ + Space |
+| Transcribe and submit | Right ⌘ + Return *(opt-in)* |
+
+The submit shortcut transcribes, pastes, and presses Return — useful for chat and terminal workflows. Enable it in the dashboard settings.
 
 Configurable via CLI flags or the dashboard settings:
 
 ```
---modifier-key KEY   Modifier key (default: rcmd). Options: rcmd, lcmd, ralt, lalt, rshift, lshift, rctrl, lctrl
+--modifier-key KEY   Modifier key (default: rcmd). Options: rcmd, lcmd, ralt, lalt, rshift, lshift, rctrl, lctrl, fn
 --toggle-key KEY     Toggle key (default: space). Options: space, return, tab, escape
 ```
 
@@ -142,7 +145,7 @@ Wordbird checks these on startup and tells you what's missing.
 make backend-dev      # API server with hot reload
 make daemon-dev       # daemon only (expects server running)
 make frontend-dev     # Vite dev server with API proxy
-make dev              # backend + frontend dev servers
+make dev              # backend + frontend + daemon (all three)
 make wordbird         # build frontend + run everything
 make backend-test     # run pytest
 ```

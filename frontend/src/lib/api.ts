@@ -6,6 +6,7 @@ export interface Transcription {
   app_name: string | null
   duration_seconds: number | null
   cwd: string | null
+  audio_filename: string | null
 }
 
 export interface Stats {
@@ -20,6 +21,10 @@ export interface ConfigData {
   transcription_model: string
   fix_model: string
   no_fix: boolean
+  sound: boolean
+  submit_with_return: boolean
+  save_audio: boolean
+  mute_during_recording: boolean
 }
 
 export interface ConfigResponse {
@@ -27,6 +32,8 @@ export interface ConfigResponse {
   modifier_key_options: string[]
   toggle_key_options: string[]
   key_labels: Record<string, string>
+  transcription_model_suggestions: string[]
+  fix_model_suggestions: string[]
 }
 
 export async function fetchStats(): Promise<Stats> {
@@ -51,6 +58,12 @@ export async function saveConfig(update: Partial<ConfigData>): Promise<boolean> 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(update),
   })
+  const data = await res.json()
+  return data.ok === true
+}
+
+export async function deleteTranscription(id: number): Promise<boolean> {
+  const res = await fetch(`/api/transcriptions/${id}`, { method: "DELETE" })
   const data = await res.json()
   return data.ok === true
 }

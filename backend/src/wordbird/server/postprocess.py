@@ -61,12 +61,26 @@ class PostProcessor:
         if self._loaded_model_id == model_id:
             return
         print(f"   ✨ Loading post-processor ({model_id})...")
+        import gc
+
+        import mlx.core as mx
+
+        mx.synchronize()
+        self._model = None
+        self._tokenizer = None
+        gc.collect()
+        mx.clear_cache()
         result = load(model_id)
         self._model, self._tokenizer = result[0], result[1]
         self._loaded_model_id = model_id
         print("   ✨ Post-processor ready.")
 
-    def fix(self, text: str, context_content: str | None = None) -> tuple[str, dict]:
+    def fix(
+        self,
+        text: str,
+        context_content: str | None = None,
+        model_id: str | None = None,
+    ) -> tuple[str, dict]:
         """Fix transcription errors. Returns (fixed_text, front_matter)."""
         if not text.strip():
             return text, {}
@@ -76,9 +90,9 @@ class PostProcessor:
         else:
             front_matter, body = parse_wordbird_md(DEFAULT_PROMPT)
 
-        # CLI flag overrides front matter
-        fix_model = self._cli_model_id or front_matter.get(
-            "fix_model", DEFAULT_FIX_MODEL
+        # Priority: front matter > explicit model_id > CLI flag > default
+        fix_model = front_matter.get(
+            "fix_model", model_id or self._cli_model_id or DEFAULT_FIX_MODEL
         )
 
         self.load(fix_model)
