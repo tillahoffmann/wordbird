@@ -1,7 +1,7 @@
 """macOS menu bar icon with state indicators."""
 
-import os
 from enum import Enum, auto
+from pathlib import Path
 
 import AppKit
 import Foundation
@@ -21,7 +21,7 @@ def _rgb(r, g, b):
     )
 
 
-_ICON_SVG = os.path.join(os.path.dirname(__file__), "icon.svg")
+_ICON_SVG = str(Path(__file__).parent / "static" / "icon.svg")
 
 _STATE_LABELS = {
     State.IDLE: "Idle",
@@ -100,11 +100,14 @@ class MenuBar(AppKit.NSObject):
         self._on_quit = None
         self._level_callback = None
         self._mic_ready_callback = None
+        self._on_select_mic = None
+        self._list_mics = None
         self._level_timer = None
         self._spinner_idx = 0
         self._state = State.IDLE
         self._status_item = None
         self._menu = None
+        self._mic_submenu = None
         self._periodic_callbacks: list = []
         return self
 
@@ -119,6 +122,12 @@ class MenuBar(AppKit.NSObject):
     @objc.python_method
     def set_mic_ready_callback(self, cb):
         self._mic_ready_callback = cb
+
+    @objc.python_method
+    def set_mic_callbacks(self, list_mics, on_select):
+        """Set callbacks for mic device menu: list_mics() -> list[dict], on_select(device_id)."""
+        self._list_mics = list_mics
+        self._on_select_mic = on_select
 
     @objc.python_method
     def add_periodic_callback(self, cb):
@@ -156,7 +165,24 @@ class MenuBar(AppKit.NSObject):
         dashboard_item.setTarget_(self)
         self._menu.addItem_(dashboard_item)
 
+        settings_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Settings…", "openSettings:", ","
+        )
+        settings_item.setTarget_(self)
+        self._menu.addItem_(settings_item)
+
+        # Microphone submenu
+        mic_menu_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Microphone", None, ""
+        )
+        self._mic_submenu = AppKit.NSMenu.alloc().init()
+        mic_menu_item.setSubmenu_(self._mic_submenu)
+        self._menu.addItem_(mic_menu_item)
+
         self._menu.addItem_(AppKit.NSMenuItem.separatorItem())
+
+        # Rebuild mic list when menu opens
+        self._menu.setDelegate_(self)
 
         quit_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
             "Quit wordbird", "quit:", "q"
@@ -260,6 +286,71 @@ class MenuBar(AppKit.NSObject):
         for cb in self._periodic_callbacks:
             cb()
 
+    def menuNeedsUpdate_(self, menu):
+        """NSMenuDelegate: rebuild the mic submenu when the menu opens."""
+        if self._mic_submenu is None or self._list_mics is None:
+            return
+        self._mic_submenu.removeAllItems()
+        try:
+            devices, selected_id = self._list_mics()
+        except Exception:
+            devices, selected_id = [], None
+
+        if not devices:
+            item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "No input devices", None, ""
+            )
+            item.setEnabled_(False)
+            self._mic_submenu.addItem_(item)
+            return
+
+        # "System Default" option — star indicates it adapts to OS settings
+        default_name = next((d["name"] for d in devices if d["is_default"]), "unknown")
+        default_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            f"System Default ({default_name}) ★", "selectMic:", ""
+        )
+        default_item.setTarget_(self)
+        default_item.setTag_(-1)
+        if selected_id is None:
+            default_item.setState_(AppKit.NSOnState)
+        self._mic_submenu.addItem_(default_item)
+        self._mic_submenu.addItem_(AppKit.NSMenuItem.separatorItem())
+
+        for dev in devices:
+            item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                dev["name"], "selectMic:", ""
+            )
+            item.setTarget_(self)
+            item.setTag_(dev["id"])
+            if selected_id == dev["id"]:
+                item.setState_(AppKit.NSOnState)
+            self._mic_submenu.addItem_(item)
+
+    def selectMic_(self, sender):
+        """Handle mic selection from submenu — persist to config."""
+        device_id = sender.tag()
+        if device_id == -1:
+            device_id = None
+        if self._on_select_mic:
+            self._on_select_mic(device_id)
+
+        # Persist: store device name (not ID, since IDs change)
+        try:
+            import sounddevice as sd
+            import tomli_w
+
+            from wordbird.config import CONFIG_PATH, load_config
+
+            cfg = load_config()
+            if device_id is not None:
+                cfg["mic_device"] = sd.query_devices(device_id)["name"]
+            else:
+                cfg.pop("mic_device", None)
+            with CONFIG_PATH.open("wb") as f:
+                tomli_w.dump(cfg, f)
+        except Exception:
+            pass
+
     def copyLast_(self, sender):
         from wordbird.server.history import recent
 
@@ -274,6 +365,11 @@ class MenuBar(AppKit.NSObject):
         from wordbird.server.server import open_dashboard
 
         open_dashboard()
+
+    def openSettings_(self, sender):
+        from wordbird.server.server import open_dashboard
+
+        open_dashboard(hash="settings")
 
     def quit_(self, sender):
         if self._on_quit:

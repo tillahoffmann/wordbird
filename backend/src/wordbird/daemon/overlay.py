@@ -17,14 +17,17 @@ from AppKit import (
     NSImage,
     NSImageSymbolConfiguration,
     NSImageView,
+    NSLineBreakByTruncatingTail,
     NSScreen,
     NSTextAlignmentCenter,
     NSTextField,
     NSView,
     NSWindow,
     NSWindowCollectionBehaviorCanJoinAllSpaces,
+    NSWindowCollectionBehaviorFullScreenAuxiliary,
     NSWindowCollectionBehaviorStationary,
     NSWindowStyleMaskBorderless,
+    NSWorkspace,
 )
 
 
@@ -54,9 +57,9 @@ RED = _rgb(255, 56, 60)
 GREEN = _rgb(100, 220, 100)
 BLUE = _rgb(100, 180, 255)
 
-PILL_W, PILL_H = 220, 36
-NUM_BARS = 20
-BAR_W, BAR_GAP = 3, 2
+PILL_W, PILL_H = 250, 36
+NUM_BARS = 19
+BAR_W, BAR_GAP = 4, 3
 MAX_BAR_H = 20
 
 
@@ -122,13 +125,15 @@ class Overlay(Foundation.NSObject):
 
         # Center label
         self._label = NSTextField.labelWithString_("")
-        self._label.setFrame_(((0, (PILL_H - 18) / 2), (PILL_W, 18)))
+        # Leave space for icon (left 32px) and cancel button (right 36px)
+        self._label.setFrame_(((32, (PILL_H - 18) / 2), (PILL_W - 68, 18)))
         self._label.setAlignment_(NSTextAlignmentCenter)
         self._label.setFont_(NSFont.systemFontOfSize_weight_(13, NSFontWeightMedium))
         self._label.setTextColor_(NSColor.whiteColor())
         self._label.setBackgroundColor_(NSColor.clearColor())
         self._label.setBezeled_(False)
         self._label.setEditable_(False)
+        self._label.setLineBreakMode_(NSLineBreakByTruncatingTail)
         content.addSubview_(self._label)
 
         # Recording timer (next to record icon)
@@ -158,7 +163,7 @@ class Overlay(Foundation.NSObject):
 
         # Stop button (right side)
         self._stop_button = NSButton.alloc().initWithFrame_(
-            ((PILL_W - 28, (PILL_H - 20) / 2), (20, 20))
+            ((PILL_W - 32, (PILL_H - 20) / 2), (20, 20))
         )
         self._stop_button.setImage_(
             _sf_image("xmark.circle.fill", size=14, color=_rgb(180, 180, 180))
@@ -219,7 +224,19 @@ class Overlay(Foundation.NSObject):
             bar.setHidden_(True)
 
     @objc.python_method
+    def _reposition(self):
+        """Move the pill to the screen with the key window."""
+        screen = NSScreen.mainScreen()
+        if screen is None:
+            return
+        visible = screen.visibleFrame()
+        x = visible.origin.x + (visible.size.width - PILL_W) / 2
+        y = visible.origin.y + visible.size.height - 50
+        self._window.setFrameOrigin_((x, y))
+
+    @objc.python_method
     def _show_window(self):
+        self._reposition()
         self._window.setAlphaValue_(1.0)
         self._window.orderFrontRegardless()
 
@@ -231,11 +248,14 @@ class Overlay(Foundation.NSObject):
     # --- Public API (safe to call from any thread) ---
 
     @objc.python_method
-    def show_connecting(self):
+    def show_connecting(self, mic_name: str = "Mic"):
+        self._connecting_mic_name = mic_name
         self._main("doShowConnecting:")
 
     def doShowConnecting_(self, _):
         self._stop_timer()
+        name = getattr(self, "_connecting_mic_name", "Mic")
+        self._show_pill("mic.fill", f"Connecting {name}", YELLOW, cancellable=True)
         self._show_window()
         self._start_timer(0.1, "tickConnecting:")
 
@@ -244,13 +264,15 @@ class Overlay(Foundation.NSObject):
         if mic_ready:
             self.doShowRecording_(None)
             return
-        self._show_pill("mic.fill", "Connecting mic", YELLOW, cancellable=True)
+        name = getattr(self, "_connecting_mic_name", "Mic")
+        self._show_pill("mic.fill", f"Connecting {name}", YELLOW, cancellable=True)
         alpha = 0.7 + 0.3 * math.sin(self._tick * 0.33)
         self._icon_view.setAlphaValue_(alpha)
         self._tick += 1
 
     def doShowRecording_(self, _):
         self._stop_timer()
+        self._icon_view.setAlphaValue_(1.0)
         self._level_history.clear()
         self._level_history.extend([0.0] * NUM_BARS)
         self._show_window()
@@ -284,6 +306,14 @@ class Overlay(Foundation.NSObject):
             f"{int(elapsed) // 60:02d}:{int(elapsed) % 60:02d}"
         )
         self._tick += 1
+
+    @objc.python_method
+    def show_warming(self):
+        self._main("doShowWarming:")
+
+    def doShowWarming_(self, _):
+        self._stop_timer()
+        self._show_pill("flame.fill", "Warming up", _rgb(255, 149, 0))
 
     @objc.python_method
     def show_transcribing(self):
@@ -338,4 +368,129 @@ class Overlay(Foundation.NSObject):
 
     def doHide_(self, _):
         self._stop_timer()
+        self._window.orderOut_(None)
+
+
+# --- Window highlight border ---
+
+HIGHLIGHT_BORDER = 3
+HIGHLIGHT_CORNER = 10
+HIGHLIGHT_COLOR = Quartz.CGColorCreateGenericRGB(1.0, 0.553, 0.157, 0.65)
+HIGHLIGHT_INSET = 1  # inset so the border sits just inside the window edge
+
+
+def _frontmost_window_bounds():
+    """Return (x, y, w, h) in AppKit coords for the frontmost app's key window.
+
+    Returns None if the window cannot be determined.
+    """
+    app = NSWorkspace.sharedWorkspace().frontmostApplication()
+    if app is None:
+        return None
+    pid = app.processIdentifier()
+
+    windows = Quartz.CGWindowListCopyWindowInfo(
+        Quartz.kCGWindowListOptionOnScreenOnly
+        | Quartz.kCGWindowListExcludeDesktopElements,
+        Quartz.kCGNullWindowID,
+    )
+    if not windows:
+        return None
+
+    for w in windows:
+        if w.get("kCGWindowOwnerPID") == pid and w.get("kCGWindowLayer", -1) == 0:
+            b = w.get("kCGWindowBounds")
+            if b:
+                # Convert CoreGraphics (top-left origin) to AppKit (bottom-left origin)
+                screen_h = NSScreen.mainScreen().frame().size.height
+                x, y, width, height = b["X"], b["Y"], b["Width"], b["Height"]
+                appkit_y = screen_h - y - height
+                return (x, y, width, height, appkit_y)
+    return None
+
+
+class WindowHighlight(Foundation.NSObject):
+    """Subtle border highlight around the target paste window."""
+
+    def init(self):
+        self = objc.super(WindowHighlight, self).init()
+        if self is None:
+            return None
+        self._window = None
+        self._timer = None
+        return self
+
+    @objc.python_method
+    def setup(self):
+        """Create the highlight window. Must be called on the main thread."""
+        self._window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            ((0, 0), (100, 100)),
+            NSWindowStyleMaskBorderless,
+            NSBackingStoreBuffered,
+            False,
+        )
+        self._window.setLevel_(NSFloatingWindowLevel)
+        self._window.setOpaque_(False)
+        self._window.setBackgroundColor_(NSColor.clearColor())
+        self._window.setIgnoresMouseEvents_(True)
+        self._window.setHasShadow_(False)
+        self._window.setCollectionBehavior_(
+            NSWindowCollectionBehaviorCanJoinAllSpaces
+            | NSWindowCollectionBehaviorStationary
+            | NSWindowCollectionBehaviorFullScreenAuxiliary
+        )
+
+        content = self._window.contentView()
+        content.setWantsLayer_(True)
+        layer = content.layer()
+        layer.setBorderWidth_(HIGHLIGHT_BORDER)
+        layer.setBorderColor_(HIGHLIGHT_COLOR)
+        layer.setCornerRadius_(HIGHLIGHT_CORNER)
+        layer.setBackgroundColor_(Quartz.CGColorCreateGenericRGB(0, 0, 0, 0))
+
+    @objc.python_method
+    def _reposition(self):
+        """Move the highlight to match the frontmost window."""
+        bounds = _frontmost_window_bounds()
+        if bounds is None:
+            return
+        x, _, w, h, appkit_y = bounds
+        inset = HIGHLIGHT_INSET
+        self._window.setFrame_display_(
+            ((x + inset, appkit_y + inset), (w - 2 * inset, h - 2 * inset)),
+            True,
+        )
+
+    # --- Public API (safe to call from any thread) ---
+
+    @objc.python_method
+    def show(self):
+        self.performSelectorOnMainThread_withObject_waitUntilDone_(
+            "doShow:", None, False
+        )
+
+    def doShow_(self, _):
+        self._reposition()
+        self._window.setAlphaValue_(1.0)
+        self._window.orderFrontRegardless()
+        # Poll for window movement
+        if self._timer is not None:
+            self._timer.invalidate()
+        self._timer = Foundation.NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            0.2, self, "tickReposition:", None, True
+        )
+
+    def tickReposition_(self, timer):
+        self._reposition()
+
+    @objc.python_method
+    def hide(self):
+        self.performSelectorOnMainThread_withObject_waitUntilDone_(
+            "doHide:", None, False
+        )
+
+    def doHide_(self, _):
+        if self._timer is not None:
+            self._timer.invalidate()
+            self._timer = None
         self._window.orderOut_(None)

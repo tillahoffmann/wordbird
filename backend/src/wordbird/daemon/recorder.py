@@ -11,6 +11,7 @@ SAMPLE_RATE = 16000
 CHANNELS = 1
 DTYPE = "float32"
 BLOCK_SIZE = 1024
+MIC_READY_STABLE = 3  # consecutive stable-RMS chunks before mic is "ready"
 
 
 class Recorder:
@@ -24,6 +25,9 @@ class Recorder:
         self._lock = threading.Lock()
         self._level: float = 0.0
         self._mic_ready = False
+        self._prev_rms: float = 0.0
+        self._stable_count: int = 0  # consecutive chunks with stable RMS
+        self._device_id: int | None = None  # None = system default
 
     @property
     def is_recording(self) -> bool:
@@ -39,6 +43,55 @@ class Recorder:
         """True once the mic has produced non-silent audio."""
         return self._mic_ready
 
+    @property
+    def device_name(self) -> str | None:
+        """Name of the current/selected input device."""
+        try:
+            if self._device_id is not None:
+                return sd.query_devices(self._device_id)["name"]
+            device = sd.query_devices(kind="input")
+            return device["name"] if device else None
+        except Exception:
+            return None
+
+    def set_device(self, device_id: int | None):
+        """Set the input device by ID. None = system default."""
+        self._device_id = device_id
+
+    def set_device_by_name(self, name: str | None):
+        """Set the input device by name. None = system default."""
+        if name is None:
+            self._device_id = None
+            return
+        for dev in self.list_input_devices():
+            if dev["name"] == name:
+                self._device_id = dev["id"]
+                return
+        # Name not found — fall back to default
+        self._device_id = None
+
+    @staticmethod
+    def list_input_devices() -> list[dict]:
+        """List available input devices. Returns [{id, name, is_default}]."""
+        try:
+            sd._terminate()
+            sd._initialize()
+            devices = sd.query_devices()
+            default_id = sd.default.device[0]
+            result = []
+            for i, d in enumerate(devices):
+                if d["max_input_channels"] > 0:
+                    result.append(
+                        {
+                            "id": i,
+                            "name": d["name"],
+                            "is_default": i == default_id,
+                        }
+                    )
+            return result
+        except Exception:
+            return []
+
     def start(self):
         """Open the mic and start recording."""
         with self._lock:
@@ -47,8 +100,21 @@ class Recorder:
             self._chunks = []
             self._level = 0.0
             self._mic_ready = False
+            self._prev_rms = 0.0
+            self._stable_count = 0
+            self._first_audio_chunk: int | None = None
+
+            # Reinitialize PortAudio to pick up device changes
+            # (e.g., AirPods connecting, USB mic plugging in)
+            try:
+                sd._terminate()
+                sd._initialize()
+            except Exception:
+                pass
+
             try:
                 self._stream = sd.InputStream(
+                    device=self._device_id,
                     samplerate=self.sample_rate,
                     channels=CHANNELS,
                     dtype=DTYPE,
@@ -57,23 +123,9 @@ class Recorder:
                 )
                 self._stream.start()
                 self._recording = True
-            except Exception:
-                # PortAudio device list may be stale — reinitialize and retry
-                try:
-                    sd._terminate()
-                    sd._initialize()
-                    self._stream = sd.InputStream(
-                        samplerate=self.sample_rate,
-                        channels=CHANNELS,
-                        dtype=DTYPE,
-                        blocksize=BLOCK_SIZE,
-                        callback=self._callback,
-                    )
-                    self._stream.start()
-                    self._recording = True
-                except Exception as e:
-                    print(f"   ⚠️  Mic open failed: {e}")
-                    self._stream = None
+            except Exception as e:
+                print(f"   ⚠️  Mic open failed: {e}")
+                self._stream = None
 
     def stop(self) -> tuple[bytes, float]:
         """Stop recording and return (WAV bytes, duration in seconds)."""
@@ -91,6 +143,12 @@ class Recorder:
         if not chunks:
             return b"", 0.0
 
+        # Drop leading silence (chunks before first non-zero audio)
+        start = self._first_audio_chunk or 0
+        chunks = chunks[start:]
+        if not chunks:
+            return b"", 0.0
+
         audio = np.concatenate(chunks, axis=0)
         duration = len(audio) / self.sample_rate
         return self._to_wav_bytes(audio), duration
@@ -99,8 +157,21 @@ class Recorder:
         chunk = indata.copy()
         rms = float(np.sqrt(np.mean(chunk**2)))
         self._level = min(rms * 6.0, 1.0)
-        if not self._mic_ready and rms > 0:
-            self._mic_ready = True
+        if not self._mic_ready:
+            # Detect mic ready by waiting for stable (non-ramping) signal.
+            # During warmup, RMS jumps from 0 → small → larger over a few
+            # chunks. Once the RMS stabilises (consecutive chunks within 2x
+            # of each other, both non-zero), the hardware is streaming.
+            if rms == 0 or self._prev_rms == 0:
+                self._stable_count = 0
+            elif max(rms, self._prev_rms) / min(rms, self._prev_rms) <= 2.0:
+                self._stable_count += 1
+                if self._stable_count >= MIC_READY_STABLE:
+                    self._mic_ready = True
+                    self._first_audio_chunk = len(self._chunks)
+            else:
+                self._stable_count = 0
+            self._prev_rms = rms
         if self._recording:
             self._chunks.append(chunk)
 

@@ -11,7 +11,7 @@ This extension connects your VS Code workspace to Wordbird so that `WORDBIRD.md`
 3. Add a `WORDBIRD.md` to your project root (`uvx wordbird init`)
 4. Dictate — Wordbird uses your project's context to correct transcription errors
 
-The extension reads `WORDBIRD.md` from your workspace and writes it to `~/.wordbird/vscode-context.json`. Wordbird picks this up when VS Code is the focused app, cross-checking the process ID to ensure the context matches the active window.
+The extension reads `WORDBIRD.md` from your workspace and writes it to `~/.wordbird/editor-contexts/{pid}.json`. Wordbird picks this up when VS Code is the focused app, cross-checking the process ID to ensure the context matches the active window.
 
 ## What it sends
 

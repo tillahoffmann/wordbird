@@ -1,8 +1,11 @@
 """Daemon that handles hotkeys, recording, and UI — delegates transcription to the server."""
 
-import os
+import io
 import signal
 import threading
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 
 import AppKit
 import Foundation
@@ -10,11 +13,11 @@ import httpx
 import objc
 import Quartz
 
-from wordbird.config import CONFIG_PATH, KEY_LABELS
+from wordbird.config import AUDIO_DIR, CONFIG_PATH, KEY_LABELS
 from wordbird.daemon.menubar import MenuBar, State
-from wordbird.daemon.overlay import Overlay
+from wordbird.daemon.overlay import Overlay, WindowHighlight
 from wordbird.daemon.recorder import Recorder
-from wordbird.daemon.typer import type_text
+from wordbird.daemon.typer import press_return, type_text
 
 # macOS keycodes
 KEYCODES = {
@@ -26,6 +29,7 @@ KEYCODES = {
     "lshift": 56,
     "rctrl": 62,
     "lctrl": 59,
+    "fn": 63,
     "space": 49,
     "return": 36,
     "tab": 48,
@@ -42,10 +46,47 @@ MODIFIER_FLAGS = {
     "lshift": Quartz.kCGEventFlagMaskShift,
     "rctrl": Quartz.kCGEventFlagMaskControl,
     "lctrl": Quartz.kCGEventFlagMaskControl,
+    "fn": Quartz.kCGEventFlagMaskSecondaryFn,
 }
+
+_STATIC_DIR = Path(__file__).parent / "static"
+_BONG_PATH = str(_STATIC_DIR / "bong.ogg")
 
 # How often to check if the event tap is still enabled (seconds)
 _TAP_CHECK_INTERVAL = 5.0
+
+
+def _get_system_muted() -> bool | None:
+    """Check if system audio output is muted. Returns None on error."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", "output muted of (get volume settings)"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip() == "true"
+    except Exception:
+        return None
+
+
+def _set_system_muted(muted: bool):
+    """Mute or unmute system audio output."""
+    import subprocess
+
+    try:
+        val = "true" if muted else "false"
+        subprocess.run(
+            ["osascript", "-e", f"set volume output muted {val}"],
+            capture_output=True,
+            timeout=2,
+        )
+    except Exception as e:
+        print(f"   ⚠️  Failed to {'mute' if muted else 'unmute'} audio: {e}")
 
 
 class Daemon:
@@ -56,33 +97,50 @@ class Daemon:
 
     def __init__(
         self,
-        modifier_key: str = "rcmd",
-        toggle_key: str = "space",
+        cfg: dict,
         server_url: str = "http://127.0.0.1:7870",
-        no_fix: bool = False,
     ):
         self.recorder = Recorder()
         self._server_url = server_url
-        self._no_fix = no_fix
+        self._submit_after = False
+        self._stt_warm = threading.Event()
+        self._stt_warm.set()  # Assume loaded until proven otherwise
+        self._fix_warm = threading.Event()
+        self._fix_warm.set()
 
-        self._modifier_keycode = KEYCODES[modifier_key]
-        self._modifier_flag = MODIFIER_FLAGS[modifier_key]
-        self._toggle_keycode = KEYCODES[toggle_key]
-        self._modifier_label = KEY_LABELS.get(modifier_key, modifier_key)
-        self._toggle_label = KEY_LABELS.get(toggle_key, toggle_key)
+        # Set defaults before apply_config overwrites them
+        self._modifier_keycode = KEYCODES["rcmd"]
+        self._modifier_flag = MODIFIER_FLAGS["rcmd"]
+        self._toggle_keycode = KEYCODES["space"]
+        self._modifier_label = KEY_LABELS["rcmd"]
+        self._toggle_label = KEY_LABELS["space"]
+        self._no_fix = False
+        self._sound = True
+        self._submit_with_return = False
+
+        self.apply_config(cfg)
 
         self.menubar = MenuBar.alloc().init()
         self.menubar.set_on_quit(self._on_quit)
         self.menubar.set_level_callback(lambda: self.recorder.level)
         self.menubar.set_mic_ready_callback(lambda: self.recorder.mic_ready)
+        self.menubar.set_mic_callbacks(
+            list_mics=lambda: (
+                Recorder.list_input_devices(),
+                self.recorder._device_id,
+            ),
+            on_select=self.recorder.set_device,
+        )
         self.overlay = Overlay.alloc().init()
         self.overlay.set_level_callback(lambda: self.recorder.level)
         self.overlay.set_mic_ready_callback(lambda: self.recorder.mic_ready)
         self.overlay.set_cancel_callback(self._abort)
+        self.highlight = WindowHighlight.alloc().init()
 
         self._modifier_down = False
         self._transcribing = False
         self._cancelled = False
+        self._was_muted: bool | None = None  # saved mute state to restore
         self._tap = None
         self._server_proc = None
         self._config_mtime: float = 0.0
@@ -91,14 +149,14 @@ class Daemon:
     def _update_config_mtime(self):
         """Record the current mtime of the config file."""
         try:
-            self._config_mtime = os.path.getmtime(CONFIG_PATH)
+            self._config_mtime = CONFIG_PATH.stat().st_mtime
         except FileNotFoundError:
             self._config_mtime = 0.0
 
     def _check_config_changed(self):
         """Reload config if the file has been modified."""
         try:
-            mtime = os.path.getmtime(CONFIG_PATH)
+            mtime = CONFIG_PATH.stat().st_mtime
         except FileNotFoundError:
             return
         if mtime != self._config_mtime:
@@ -119,6 +177,11 @@ class Daemon:
         self._modifier_label = KEY_LABELS.get(modifier_key, modifier_key)
         self._toggle_label = KEY_LABELS.get(toggle_key, toggle_key)
         self._no_fix = cfg.get("no_fix", False)
+        self._sound = cfg.get("sound", True)
+        self._submit_with_return = cfg.get("submit_with_return", False)
+        self._save_audio = cfg.get("save_audio", False)
+        self._mute_during_recording = cfg.get("mute_during_recording", False)
+        self.recorder.set_device_by_name(cfg.get("mic_device"))
         print(f"   🔄 Config reloaded: {self._modifier_label} + {self._toggle_label}")
 
     def _toggle_recording(self):
@@ -143,30 +206,84 @@ class Daemon:
             self.overlay.show_error("Server not reachable")
             return
 
+        # Mute system audio to avoid echo
+        if self._mute_during_recording:
+            self._was_muted = _get_system_muted()
+            if self._was_muted is False:
+                _set_system_muted(True)
+
+        self.highlight.show()
         self.menubar.set_state(State.CONNECTING)
-        self.overlay.show_connecting()
-        print("   🔌 Connecting mic...")
         self.recorder.start()
+        mic = self.recorder.device_name or "Mic"
+        self.overlay.show_connecting(mic)
+        print(f"   🔌 Connecting {mic}...")
+
+        # Fire off model warm-up in background — runs while user records
+        self._stt_warm = threading.Event()
+        self._fix_warm = threading.Event()
+
+        def _warm_stt():
+            try:
+                httpx.post(
+                    f"{self._server_url}/api/models/transcription/load", timeout=120
+                )
+            except Exception:
+                pass
+            self._stt_warm.set()
+
+        def _warm_fix():
+            try:
+                httpx.post(
+                    f"{self._server_url}/api/models/postprocess/load", timeout=120
+                )
+            except Exception:
+                pass
+            self._fix_warm.set()
+
+        threading.Thread(target=_warm_stt, daemon=True).start()
+        threading.Thread(target=_warm_fix, daemon=True).start()
 
         def _wait_for_mic():
+            import subprocess
             import time
 
+            deadline = time.monotonic() + 5.0
             while self.recorder.is_recording and not self.recorder.mic_ready:
+                if time.monotonic() > deadline:
+                    mic = self.recorder.device_name or "unknown"
+                    print(f"   ❌ Mic ({mic}) did not produce audio within 5 seconds.")
+                    self.recorder.stop()
+                    self.highlight.hide()
+                    self._restore_mute()
+                    self.menubar.set_state(State.IDLE)
+                    self.overlay.show_error(f"Unresponsive {mic}")
+                    return
                 time.sleep(0.05)
             if self.recorder.is_recording:
                 self.menubar.set_state(State.LISTENING)
-                print("   🎤 Listening...")
+                mic = self.recorder.device_name or "unknown"
+                print(f"   🎤 Listening {mic}")
+                if self._sound and not self._mute_during_recording:
+                    subprocess.Popen(
+                        ["afplay", _BONG_PATH],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
 
         threading.Thread(target=_wait_for_mic, daemon=True).start()
 
-    def _stop_and_transcribe(self):
+    def _stop_and_transcribe(self, submit: bool = False):
         """Stop recording and send to server for transcription."""
         if self._transcribing:
             return
         if not self.recorder.is_recording:
             return
 
+        self._submit_after = submit
         print("   ⏹️  Stopped recording.")
+        self.highlight.hide()
+        self._restore_mute()
         wav_bytes, duration = self.recorder.stop()
 
         if not wav_bytes:
@@ -176,7 +293,6 @@ class Daemon:
             return
 
         self.menubar.set_state(State.TRANSCRIBING)
-        self.overlay.show_transcribing()
         threading.Thread(
             target=self._transcribe_and_type,
             args=(wav_bytes, duration),
@@ -195,7 +311,14 @@ class Daemon:
             if self._cancelled:
                 return
 
+            # Wait for STT model if still warming up
+            if not self._stt_warm.is_set():
+                self.overlay.show_warming()
+                print("   🔥 Warming up transcription model...")
+                self._stt_warm.wait()
+
             # Step 1: Transcribe (speech-to-text)
+            self.overlay.show_transcribing()
             print("   ✨ Transcribing...")
             with httpx.Client(timeout=120) as client:
                 resp = client.post(
@@ -223,6 +346,12 @@ class Daemon:
             fixed_text = None
             fix_model = None
             if not self._no_fix:
+                # Wait for fix model if still warming up
+                if not self._fix_warm.is_set():
+                    self.overlay.show_warming()
+                    print("   🔥 Warming up post-processing model...")
+                    self._fix_warm.wait()
+
                 self.overlay.show_improving()
 
                 if self._cancelled:
@@ -253,7 +382,42 @@ class Daemon:
             word_count = len(final_text.split())
 
             type_text(final_text)
+            if self._submit_after:
+                import time
+
+                time.sleep(0.05)
+                press_return()
             self.overlay.show_done(word_count)
+
+            # Save audio if enabled
+            audio_filename = None
+            if self._save_audio:
+                try:
+                    import numpy as np
+                    import soundfile as sf
+
+                    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+                    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+                    audio_filename = f"{ts}_{uuid.uuid4().hex[:8]}.ogg"
+                    audio_path = AUDIO_DIR / audio_filename
+
+                    # Decode WAV bytes and write as OGG
+                    import wave
+
+                    with wave.open(io.BytesIO(wav_bytes)) as wf:
+                        frames = wf.readframes(wf.getnframes())
+                        audio_data = np.frombuffer(frames, dtype=np.int16)
+                        sf.write(
+                            str(audio_path),
+                            audio_data,
+                            wf.getframerate(),
+                            format="OGG",
+                            subtype="VORBIS",
+                        )
+                    print(f"   💾 Audio saved: {audio_filename}")
+                except Exception as e:
+                    print(f"   ⚠️  Failed to save audio: {e}")
+                    audio_filename = None
 
             # Record in history via server
             with httpx.Client(timeout=10) as client:
@@ -268,6 +432,7 @@ class Daemon:
                         "transcription_model": transcription_model,
                         "fix_model": fix_model,
                         "word_count": word_count,
+                        "audio_filename": audio_filename,
                     },
                 )
         except Exception as e:
@@ -278,10 +443,18 @@ class Daemon:
             self._transcribing = False
             self.menubar.set_state(State.IDLE)
 
+    def _restore_mute(self):
+        """Restore system mute state if we changed it."""
+        if self._was_muted is not None and not self._was_muted:
+            _set_system_muted(False)
+        self._was_muted = None
+
     def _abort(self):
         """Abort recording or transcription."""
         print("   ⛔ Cancelled.")
         self._cancelled = True
+        self.highlight.hide()
+        self._restore_mute()
         if self.recorder.is_recording:
             self.recorder.stop()
         self.menubar.set_state(State.IDLE)
@@ -289,6 +462,8 @@ class Daemon:
 
     def _on_quit(self):
         """Clean up on quit."""
+        self.highlight.hide()
+        self._restore_mute()
         if self.recorder.is_recording:
             self.recorder.stop()
 
@@ -324,9 +499,20 @@ class Daemon:
                 self._toggle_recording()
                 return None
 
-            # Escape aborts (but don't swallow it)
+            # Modifier + Return — stop and submit (if enabled and recording)
+            if (
+                keycode == KEYCODES["return"]
+                and self._modifier_down
+                and self._submit_with_return
+                and self.recorder.is_recording
+            ):
+                self._stop_and_transcribe(submit=True)
+                return None
+
+            # Escape aborts and swallow the key
             if keycode == 53 and (self.recorder.is_recording or self._transcribing):
                 self._abort()
+                return None
 
         return event
 
@@ -344,6 +530,7 @@ class Daemon:
 
         self.menubar.setup()
         self.overlay.setup()
+        self.highlight.setup()
 
         # Verify the server is reachable before accepting hotkeys
         print(f"\n   🔗 Checking server at {self._server_url}...")

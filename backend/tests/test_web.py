@@ -12,9 +12,9 @@ from wordbird.server.server import create_app
 
 @pytest.fixture(autouse=True)
 def use_temp_paths(tmp_path, monkeypatch):
-    monkeypatch.setattr("wordbird.config.DATA_DIR", str(tmp_path))
-    monkeypatch.setattr("wordbird.config.CONFIG_PATH", str(tmp_path / "wordbird.toml"))
-    monkeypatch.setattr("wordbird.server.history.DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setattr("wordbird.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("wordbird.config.CONFIG_PATH", tmp_path / "wordbird.toml")
+    monkeypatch.setattr("wordbird.server.history.DB_PATH", tmp_path / "test.db")
 
 
 @pytest.fixture
@@ -170,7 +170,7 @@ class TestPostprocess:
     def test_postprocess_with_mock(self, client, monkeypatch):
         monkeypatch.setattr(
             "wordbird.server.postprocess.PostProcessor.fix",
-            lambda self, text, context_content=None: ("Fixed text.", {}),
+            lambda self, text, context_content=None, model_id=None: ("Fixed text.", {}),
         )
         monkeypatch.setattr(
             "wordbird.server.postprocess.PostProcessor.load",
@@ -184,6 +184,62 @@ class TestPostprocess:
         assert resp.status_code == 200
         data = resp.json()
         assert data["fixed_text"] == "Fixed text."
+
+
+class TestModelLoad:
+    def test_load_transcription_model(self, client, monkeypatch):
+        loaded_with = []
+        monkeypatch.setattr(
+            "wordbird.server.transcriber.Transcriber.load",
+            lambda self, model_id=None: loaded_with.append(model_id),
+        )
+
+        resp = client.post("/api/models/transcription/load")
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        assert len(loaded_with) == 1
+
+    def test_load_postprocess_model(self, client, monkeypatch):
+        loaded_with = []
+        monkeypatch.setattr(
+            "wordbird.server.postprocess.PostProcessor.load",
+            lambda self, model_id=None: loaded_with.append(model_id),
+        )
+
+        resp = client.post("/api/models/postprocess/load")
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        assert len(loaded_with) == 1
+
+    def test_load_postprocess_skipped_when_no_fix(self, client, tmp_path, monkeypatch):
+        import tomli_w
+
+        config_path = tmp_path / "wordbird.toml"
+        config_path.write_bytes(tomli_w.dumps({"no_fix": True}).encode())
+        monkeypatch.setattr("wordbird.config.CONFIG_PATH", config_path)
+
+        resp = client.post("/api/models/postprocess/load")
+        assert resp.status_code == 200
+        assert resp.json()["model"] is None
+
+    def test_load_returns_immediately_if_already_loaded(self, client, monkeypatch):
+        call_count = []
+
+        def mock_load(self, model_id=None):
+            call_count.append(1)
+
+        monkeypatch.setattr(
+            "wordbird.server.transcriber.Transcriber.load",
+            mock_load,
+        )
+
+        # First call loads
+        client.post("/api/models/transcription/load")
+        # Second call should still invoke load (server doesn't cache, Transcriber.load skips internally)
+        client.post("/api/models/transcription/load")
+        assert (
+            len(call_count) == 2
+        )  # load() called both times, but skips internally if same model
 
 
 class TestHealth:

@@ -1,8 +1,9 @@
 """FastAPI server for wordbird — API + ML inference + static frontend."""
 
-import os
+import sys
 import webbrowser
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.staticfiles import StaticFiles
@@ -13,14 +14,17 @@ from wordbird.config import (
     DEFAULT_HOST,
     DEFAULT_PORT,
     DEFAULTS,
+    FIX_MODEL_SUGGESTIONS,
     KEY_LABELS,
     MODIFIER_KEY_OPTIONS,
     TOGGLE_KEY_OPTIONS,
+    TRANSCRIPTION_MODEL_SUGGESTIONS,
 )
+from wordbird.server.history import delete as delete_transcription
 from wordbird.server.history import recent, stats
 from wordbird.server.history import record as record_transcription
 
-PACKAGE_DIR = os.path.dirname(os.path.dirname(__file__))
+PACKAGE_DIR = Path(__file__).parent
 
 
 def _get_effective_config() -> dict:
@@ -37,6 +41,10 @@ class ConfigUpdate(BaseModel):
     transcription_model: str | None = None
     fix_model: str | None = None
     no_fix: bool = False
+    sound: bool = True
+    submit_with_return: bool = False
+    save_audio: bool = False
+    mute_during_recording: bool = False
 
 
 class PostProcessRequest(BaseModel):
@@ -53,11 +61,41 @@ class HistoryRecord(BaseModel):
     transcription_model: str | None = None
     fix_model: str | None = None
     word_count: int | None = None
+    audio_filename: str | None = None
 
 
 def create_app() -> FastAPI:
-    # ML models — shared state
+    # Patch tqdm's ensure_lock to use a threading lock instead of a multiprocessing
+    # lock. The multiprocessing lock creates a POSIX semaphore that leaks on SIGTERM.
+    # Must be inside create_app (not module level) so importing this module for
+    # tests doesn't spawn a resource tracker process that hangs pytest.
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from contextlib import contextmanager
+
+    import tqdm.contrib.concurrent
+
+    @contextmanager
+    def _thread_ensure_lock(tqdm_class, lock_name=""):
+        yield threading.RLock()
+
+    tqdm.contrib.concurrent.ensure_lock = _thread_ensure_lock
+
+    # ML models — shared state, all inference runs on a single dedicated thread
+    # to avoid creating multiple loky worker pools
+
     _ml_state: dict = {"transcriber": None, "postprocessor": None}
+    _ml_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ml")
+
+    async def _run_ml(func, *args, **kwargs):
+        """Run a function on the dedicated ML thread."""
+        import asyncio
+        import functools
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            _ml_executor, functools.partial(func, *args, **kwargs)
+        )
 
     def _get_transcriber():
         if _ml_state["transcriber"] is None:
@@ -73,12 +111,26 @@ def create_app() -> FastAPI:
             _ml_state["postprocessor"] = PostProcessor()
         return _ml_state["postprocessor"]
 
+    _cleaned_up = False
+
+    def _cleanup():
+        """Release ML models and GPU memory."""
+        _ml_executor.shutdown(wait=False)
+        try:
+            import gc
+
+            import mlx.core as mx
+
+            mx.synchronize()
+            _ml_state["transcriber"] = None
+            _ml_state["postprocessor"] = None
+            gc.collect()
+            mx.clear_cache()
+        except Exception:
+            pass
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # Prevent loky semaphore leaks from tokenizer/joblib workers
-        os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-        os.environ.setdefault("JOBLIB_START_METHOD", "forkserver")
-
         # Preload models on startup
         print("🦜 Preloading ML models...")
         t = _get_transcriber()
@@ -88,7 +140,11 @@ def create_app() -> FastAPI:
             pp = _get_postprocessor()
             pp.load()
         print("🦜 Models ready.")
+
         yield
+
+        print("🦜 Shutting down...")
+        _cleanup()
 
     app = FastAPI(title="Wordbird", lifespan=lifespan)
 
@@ -100,21 +156,20 @@ def create_app() -> FastAPI:
             "modifier_key_options": MODIFIER_KEY_OPTIONS,
             "toggle_key_options": TOGGLE_KEY_OPTIONS,
             "key_labels": KEY_LABELS,
+            "transcription_model_suggestions": TRANSCRIPTION_MODEL_SUGGESTIONS,
+            "fix_model_suggestions": FIX_MODEL_SUGGESTIONS,
         }
 
     @app.put("/api/config")
     def save_config(update: ConfigUpdate):
+        import tomli_w
+
         bw_config.ensure_data_dir()
-        lines = []
+        # Only write values that differ from defaults
         data = update.model_dump(exclude_none=True)
-        for key in ["modifier_key", "toggle_key", "transcription_model", "fix_model"]:
-            val = data.get(key, DEFAULTS[key])
-            if val != DEFAULTS[key]:
-                lines.append(f'{key} = "{val}"')
-        if data.get("no_fix"):
-            lines.append("no_fix = true")
-        with open(bw_config.CONFIG_PATH, "w") as f:
-            f.write("\n".join(lines) + "\n" if lines else "")
+        overrides = {k: v for k, v in data.items() if v != DEFAULTS.get(k)}
+        with open(bw_config.CONFIG_PATH, "wb") as f:
+            tomli_w.dump(overrides, f)
         return {"ok": True}
 
     @app.get("/api/transcriptions")
@@ -129,28 +184,46 @@ def create_app() -> FastAPI:
     def health():
         return {"ok": True}
 
+    @app.post("/api/models/transcription/load")
+    async def load_transcription_model():
+        """Ensure the transcription model is loaded. Blocks until ready."""
+        cfg = _get_effective_config()
+        t = _get_transcriber()
+        await _run_ml(t.load, cfg.get("transcription_model"))
+        return {"ok": True, "model": t._loaded_model_id}
+
+    @app.post("/api/models/postprocess/load")
+    async def load_postprocess_model():
+        """Ensure the post-processing model is loaded. Blocks until ready."""
+        cfg = _get_effective_config()
+        if cfg.get("no_fix"):
+            return {"ok": True, "model": None}
+        pp = _get_postprocessor()
+        await _run_ml(pp.load, cfg.get("fix_model"))
+        return {"ok": True, "model": pp._loaded_model_id}
+
     @app.post("/api/transcribe")
     async def transcribe(
         audio: UploadFile = File(...),
         context_content: str = Form(""),
     ):
         """Transcribe audio to text (speech-to-text only)."""
-        import asyncio
-
         wav_bytes = await audio.read()
 
         from wordbird.prompt import parse_wordbird_md
 
+        # Priority: WORDBIRD.md front matter > user config > default
+        cfg = _get_effective_config()
         front_matter = {}
         if context_content:
             front_matter, _ = parse_wordbird_md(context_content)
 
-        transcription_model = front_matter.get("transcription_model")
+        transcription_model = front_matter.get(
+            "transcription_model", cfg.get("transcription_model")
+        )
 
         t = _get_transcriber()
-        raw_text = await asyncio.to_thread(
-            t.transcribe, wav_bytes, model_id=transcription_model
-        )
+        raw_text = await _run_ml(t.transcribe, wav_bytes, model_id=transcription_model)
 
         return {
             "raw_text": raw_text or "",
@@ -160,11 +233,13 @@ def create_app() -> FastAPI:
     @app.post("/api/postprocess")
     async def postprocess(req: PostProcessRequest):
         """Post-process transcribed text with LLM."""
-        import asyncio
-
+        cfg = _get_effective_config()
         pp = _get_postprocessor()
-        fixed_text, _ = await asyncio.to_thread(
-            pp.fix, req.text, context_content=req.context_content or None
+        fixed_text, _ = await _run_ml(
+            pp.fix,
+            req.text,
+            context_content=req.context_content or None,
+            model_id=cfg.get("fix_model"),
         )
         return {
             "fixed_text": fixed_text,
@@ -176,6 +251,13 @@ def create_app() -> FastAPI:
         """Record a transcription in history."""
         record_transcription(**entry.model_dump())
         return {"ok": True}
+
+    @app.delete("/api/transcriptions/{transcription_id}")
+    def remove_transcription(transcription_id: int):
+        """Delete a transcription by ID."""
+        if delete_transcription(transcription_id):
+            return {"ok": True}
+        return {"ok": False, "error": "not found"}
 
     @app.post("/api/transcribe/complete")
     async def transcribe_complete(
@@ -191,34 +273,35 @@ def create_app() -> FastAPI:
         Used by external clients (Claude plugin, etc.) that don't need
         intermediate UI updates.
         """
-        import asyncio
-
         wav_bytes = await audio.read()
 
         from wordbird.prompt import parse_wordbird_md
 
+        cfg = _get_effective_config()
         front_matter = {}
         if context_content:
             front_matter, _ = parse_wordbird_md(context_content)
 
-        transcription_model = front_matter.get("transcription_model")
+        transcription_model = front_matter.get(
+            "transcription_model", cfg.get("transcription_model")
+        )
 
         t = _get_transcriber()
-        raw_text = await asyncio.to_thread(
-            t.transcribe, wav_bytes, model_id=transcription_model
-        )
+        raw_text = await _run_ml(t.transcribe, wav_bytes, model_id=transcription_model)
 
         if not raw_text:
             return {"raw_text": "", "fixed_text": None, "word_count": 0}
 
-        cfg = _get_effective_config()
         skip_fix = no_fix or cfg.get("no_fix", False)
         fixed_text = None
 
         if not skip_fix:
             pp = _get_postprocessor()
-            fixed_text, _ = await asyncio.to_thread(
-                pp.fix, raw_text, context_content=context_content or None
+            fixed_text, _ = await _run_ml(
+                pp.fix,
+                raw_text,
+                context_content=context_content or None,
+                model_id=cfg.get("fix_model"),
             )
 
         final_text = fixed_text or raw_text
@@ -245,15 +328,27 @@ def create_app() -> FastAPI:
         }
 
     # Serve the React frontend (static files) — must be last
-    frontend_dist = os.path.join(PACKAGE_DIR, "static")
-    if os.path.isdir(frontend_dist):
-        app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+    # Serve saved audio recordings
+    bw_config.AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/audio",
+        StaticFiles(directory=str(bw_config.AUDIO_DIR)),
+        name="audio",
+    )
+
+    frontend_dist = PACKAGE_DIR / "static"
+    if frontend_dist.is_dir():
+        app.mount(
+            "/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend"
+        )
 
     return app
 
 
-# ASGI app for `uvicorn wordbird.server.server:app`
-app = create_app()
+# ASGI app factory for `uvicorn wordbird.server.server:app --factory`
+# Not created at import time to avoid spinning up a ThreadPoolExecutor
+# when the module is merely imported (e.g., during tests).
+app = create_app
 
 
 def _find_available_port(host: str, start_port: int, max_attempts: int = 10) -> int:
@@ -280,7 +375,6 @@ def start_server(wait: bool = True, timeout: float = 120) -> tuple:
     writes server.json for the daemon, and waits for the health endpoint.
     """
     import subprocess
-    import sys
     import time
 
     import httpx
@@ -294,6 +388,7 @@ def start_server(wait: bool = True, timeout: float = 120) -> tuple:
             "-m",
             "uvicorn",
             "wordbird.server.server:app",
+            "--factory",
             "--host",
             host,
             "--port",
@@ -334,6 +429,23 @@ def server_url() -> str:
     return f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"
 
 
-def open_dashboard():
-    """Open the dashboard in the default browser."""
-    webbrowser.open(server_url())
+VITE_DEV_URL = "http://localhost:5173"
+
+
+def open_dashboard(hash: str | None = None):
+    """Open the dashboard in the default browser.
+
+    Prefers the Vite dev server if it's running (for development),
+    otherwise falls back to the backend's static files.
+    """
+    import httpx
+
+    suffix = f"#{hash}" if hash else ""
+    try:
+        resp = httpx.get(VITE_DEV_URL, timeout=1)
+        if resp.status_code == 200:
+            webbrowser.open(f"{VITE_DEV_URL}{suffix}")
+            return
+    except Exception:
+        pass
+    webbrowser.open(f"{server_url()}{suffix}")

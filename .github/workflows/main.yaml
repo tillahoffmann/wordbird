@@ -3,7 +3,6 @@ name: CI / Publish
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -15,12 +14,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: cp ../README.md .
+        with:
+          enable-cache: true
+          cache-dependency-glob: "backend/uv.lock"
       - run: uv sync
       - run: uv run pytest tests/ -v
+      - run: rm -f README.md && cp ../README.md README.md && uv build
 
   publish-pypi:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: check
     runs-on: ubuntu-latest
     environment: pypi
@@ -33,18 +35,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      # Build frontend and bundle into backend
-      - run: cd frontend && npm ci && npm run build
-      - run: cp -r frontend/dist backend/src/wordbird/static
-      # Build Python package
-      - run: cp README.md backend/
-      - run: cd backend && uv build
+      - run: cd frontend && npm ci && npm run build && cp -r dist ../backend/src/wordbird/server/static
+      - run: cd backend && rm -f README.md && cp ../README.md README.md && uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: backend/dist
+          skip-existing: true
 
   publish-vscode:
-    if: false  # TODO: enable once VSCE_PAT secret is configured
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: check
     runs-on: ubuntu-latest
     defaults:
@@ -55,8 +54,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
-      - run: npx tsc
-      - run: npx vsce publish
+      - run: npm install && npx tsc
+      - run: npx vsce publish --skip-duplicate
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
