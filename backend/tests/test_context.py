@@ -2,8 +2,13 @@
 
 import json
 import os
+import sqlite3
 
-from wordbird.daemon.context import _read_editor_contexts, find_context_file
+from wordbird.daemon.context import (
+    _get_zed_workspace,
+    _read_editor_contexts,
+    find_context_file,
+)
 
 
 class TestFindContextFile:
@@ -67,22 +72,74 @@ class TestEditorContexts:
         _read_editor_contexts(99999)
         assert not stale_path.exists()
 
-    def test_identical_contexts_picks_any(self, tmp_path, monkeypatch):
-        """When all candidates have the same WORDBIRD.md, any is fine."""
+    def test_identical_contexts_same_workspace(self, tmp_path, monkeypatch):
+        """When all candidates have the same workspace and WORDBIRD.md, pick any."""
         ctx_dir = tmp_path / "editor-contexts"
         pid = os.getpid()
         self._write_ctx(ctx_dir, pid, "/tmp/proj-a", "same content")
         path_b = ctx_dir / "other.json"
         path_b.write_text(
             json.dumps(
-                {"pid": pid, "workspace": "/tmp/proj-b", "wordbird_md": "same content"}
+                {"pid": pid, "workspace": "/tmp/proj-a", "wordbird_md": "same content"}
             )
         )
 
         monkeypatch.setattr("wordbird.daemon.context.EDITOR_CONTEXTS_DIR", ctx_dir)
         workspace, content = _read_editor_contexts(pid)
-        assert workspace in ("/tmp/proj-a", "/tmp/proj-b")
+        assert workspace == "/tmp/proj-a"
         assert content == "same content"
+
+    def test_identical_contexts_different_workspaces_uses_window_title(
+        self, tmp_path, monkeypatch
+    ):
+        """When WORDBIRD.md is identical but workspaces differ, use window title."""
+        ctx_dir = tmp_path / "editor-contexts"
+        pid = os.getpid()
+        self._write_ctx(ctx_dir, pid, "/home/user/proj-a", "same content")
+        path_b = ctx_dir / "other.json"
+        path_b.write_text(
+            json.dumps(
+                {
+                    "pid": pid,
+                    "workspace": "/home/user/proj-b",
+                    "wordbird_md": "same content",
+                }
+            )
+        )
+
+        monkeypatch.setattr("wordbird.daemon.context.EDITOR_CONTEXTS_DIR", ctx_dir)
+        monkeypatch.setattr(
+            "wordbird.daemon.context._get_focused_window_title",
+            lambda _pid: "main.py — proj-b — Zed",
+        )
+
+        workspace, content = _read_editor_contexts(pid)
+        assert workspace == "/home/user/proj-b"
+        assert content == "same content"
+
+    def test_none_contexts_different_workspaces_uses_window_title(
+        self, tmp_path, monkeypatch
+    ):
+        """When both have no WORDBIRD.md, use window title to pick the right one."""
+        ctx_dir = tmp_path / "editor-contexts"
+        pid = os.getpid()
+        self._write_ctx(ctx_dir, pid, "/home/user/proj-a", None)
+        path_b = ctx_dir / "other.json"
+        path_b.write_text(
+            json.dumps(
+                {"pid": pid, "workspace": "/home/user/proj-b", "wordbird_md": None}
+            )
+        )
+
+        monkeypatch.setattr("wordbird.daemon.context.EDITOR_CONTEXTS_DIR", ctx_dir)
+        monkeypatch.setattr(
+            "wordbird.daemon.context._get_focused_window_title",
+            lambda _pid: "main.py — proj-a — Zed",
+        )
+
+        workspace, content = _read_editor_contexts(pid)
+        assert workspace == "/home/user/proj-a"
+        assert content is None
 
     def test_different_contexts_uses_window_title(self, tmp_path, monkeypatch):
         """When contents differ, use window title to disambiguate."""
@@ -166,3 +223,109 @@ class TestEditorContexts:
         workspace, content = _read_editor_contexts(pid)
         assert workspace is None
         assert content is None
+
+
+def _create_zed_db(db_path, rows):
+    """Create a minimal Zed workspaces DB with the given (paths, timestamp) rows."""
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE workspaces ("
+        "  workspace_id INTEGER PRIMARY KEY,"
+        "  paths TEXT,"
+        "  timestamp TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL"
+        ")"
+    )
+    for i, (paths, ts) in enumerate(rows, 1):
+        conn.execute(
+            "INSERT INTO workspaces (workspace_id, paths, timestamp) VALUES (?, ?, ?)",
+            (i, paths, ts),
+        )
+    conn.commit()
+    conn.close()
+
+
+class TestGetZedWorkspace:
+    def test_simple_title(self, tmp_path, monkeypatch):
+        """Simple project name like 'recordstore' resolves to full path."""
+        db_path = tmp_path / "db.sqlite"
+        _create_zed_db(db_path, [("/Users/me/code/recordstore", "2026-01-01 00:00:00")])
+
+        monkeypatch.setattr("wordbird.daemon.context.ZED_DB_PATH", db_path)
+        monkeypatch.setattr(
+            "wordbird.daemon.context._get_focused_window_title",
+            lambda _pid: "recordstore",
+        )
+
+        result = _get_zed_workspace(123)
+        assert result == "/Users/me/code/recordstore"
+
+    def test_title_with_filename(self, tmp_path, monkeypatch):
+        """Title like 'wordbird — .gitignore' extracts project name correctly."""
+        db_path = tmp_path / "db.sqlite"
+        _create_zed_db(db_path, [("/Users/me/code/wordbird", "2026-01-01 00:00:00")])
+
+        monkeypatch.setattr("wordbird.daemon.context.ZED_DB_PATH", db_path)
+        monkeypatch.setattr(
+            "wordbird.daemon.context._get_focused_window_title",
+            lambda _pid: "wordbird \u2014 .gitignore",
+        )
+
+        result = _get_zed_workspace(123)
+        assert result == "/Users/me/code/wordbird"
+
+    def test_no_match_returns_none(self, tmp_path, monkeypatch):
+        """Project name not in DB returns None."""
+        db_path = tmp_path / "db.sqlite"
+        _create_zed_db(db_path, [("/Users/me/code/other", "2026-01-01 00:00:00")])
+
+        monkeypatch.setattr("wordbird.daemon.context.ZED_DB_PATH", db_path)
+        monkeypatch.setattr(
+            "wordbird.daemon.context._get_focused_window_title",
+            lambda _pid: "nonexistent",
+        )
+
+        result = _get_zed_workspace(123)
+        assert result is None
+
+    def test_no_window_title_returns_none(self, tmp_path, monkeypatch):
+        """No window title returns None without touching DB."""
+        monkeypatch.setattr(
+            "wordbird.daemon.context._get_focused_window_title",
+            lambda _pid: None,
+        )
+
+        result = _get_zed_workspace(123)
+        assert result is None
+
+    def test_db_missing_returns_none(self, tmp_path, monkeypatch):
+        """Missing DB file returns None."""
+        monkeypatch.setattr(
+            "wordbird.daemon.context.ZED_DB_PATH", tmp_path / "nonexistent.sqlite"
+        )
+        monkeypatch.setattr(
+            "wordbird.daemon.context._get_focused_window_title",
+            lambda _pid: "myproject",
+        )
+
+        result = _get_zed_workspace(123)
+        assert result is None
+
+    def test_most_recent_timestamp_wins(self, tmp_path, monkeypatch):
+        """When multiple workspaces match, most recent timestamp wins."""
+        db_path = tmp_path / "db.sqlite"
+        _create_zed_db(
+            db_path,
+            [
+                ("/Users/me/old/backend", "2025-01-01 00:00:00"),
+                ("/Users/me/new/backend", "2026-01-01 00:00:00"),
+            ],
+        )
+
+        monkeypatch.setattr("wordbird.daemon.context.ZED_DB_PATH", db_path)
+        monkeypatch.setattr(
+            "wordbird.daemon.context._get_focused_window_title",
+            lambda _pid: "backend",
+        )
+
+        result = _get_zed_workspace(123)
+        assert result == "/Users/me/new/backend"

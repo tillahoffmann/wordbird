@@ -8,18 +8,31 @@ on:
 jobs:
   check:
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
           cache-dependency-glob: "backend/uv.lock"
-      - run: uv sync
-      - run: uv run pytest tests/ -v
-      - run: rm -f README.md && cp ../README.md README.md && uv build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Backend
+      - run: cd backend && uv sync
+      - run: cd backend && uv run ruff check src/ tests/
+      - run: cd backend && uv run ruff format --check src/ tests/
+      - run: cd backend && uv run pyright
+      - run: cd backend && uv run pytest tests/ -v
+      - run: cd backend && rm -f README.md && cp ../README.md README.md && uv build
+
+      # Frontend
+      - run: cd frontend && npm ci
+      - run: cd frontend && npm run lint
+      - run: cd frontend && npx tsc
+
+      # VS Code extension
+      - run: cd vscode-extension && npm install && npx tsc
 
   publish-pypi:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
