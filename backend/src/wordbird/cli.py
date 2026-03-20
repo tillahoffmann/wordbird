@@ -244,7 +244,7 @@ def _cmd_init_claude(model: str = "haiku"):
 
     def _rel(path: str) -> str:
         if path.startswith(cwd_prefix):
-            return path[len(cwd_prefix):]
+            return path[len(cwd_prefix) :]
         return path
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
@@ -356,7 +356,9 @@ def main():
     )
 
     sub = parser.add_subparsers(dest="command")
-    init_parser = sub.add_parser("init", help="Create a WORDBIRD.md in the current directory")
+    init_parser = sub.add_parser(
+        "init", help="Create a WORDBIRD.md in the current directory"
+    )
     init_parser.add_argument(
         "--claude",
         nargs="?",
