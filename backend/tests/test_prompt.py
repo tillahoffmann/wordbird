@@ -1,6 +1,11 @@
 """Tests for prompt template parsing and rendering."""
 
-from wordbird.prompt import DEFAULT_PROMPT, INIT_TEMPLATE, parse_wordbird_md
+from wordbird.prompt import (
+    CLAUDE_INIT_PROMPT,
+    DEFAULT_PROMPT,
+    INIT_TEMPLATE,
+    parse_wordbird_md,
+)
 from wordbird.server.postprocess import render_prompt
 
 
@@ -26,6 +31,11 @@ class TestParseWordbirdMd:
         meta, body = parse_wordbird_md(content)
         assert meta["fix_model"] == "custom/model"
         assert "Hello" in body
+
+
+class TestClaudeInitPrompt:
+    def test_embeds_init_template(self):
+        assert INIT_TEMPLATE in CLAUDE_INIT_PROMPT
 
 
 class TestRenderPrompt:

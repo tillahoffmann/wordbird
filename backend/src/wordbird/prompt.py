@@ -93,8 +93,7 @@ Input: "{{ transcript }}"
 Output:
 """
 
-
-CLAUDE_INIT_PROMPT = """\
+CLAUDE_INIT_PROMPT = f"""\
 Generate a WORDBIRD.md file in the current working directory, pre-populated with \
 project-specific terms discovered by analyzing the codebase.
 
@@ -120,56 +119,20 @@ model would produce. Common patterns:
 - Sound-alikes: "pie test" -> "pytest", "numb pie" -> "NumPy"
 - Camel/pascal case split: "app kit" -> "AppKit"
 
-Step 4: Write WORDBIRD.md using this exact template:
+Step 4: Write WORDBIRD.md. Start from the default prompt template shown below, \
+then add your discovered terms. Replace the Jinja2 comment placeholders with \
+a "Key terms:" line and "Misheard words:" lines.
 
+Default prompt template:
 ```
----
-transcription_model: mlx-community/parakeet-tdt-0.6b-v2
-fix_model: mlx-community/Qwen2.5-1.5B-Instruct-4bit
----
-
-Fix speech-to-text errors. Output ONLY the corrected text. Do NOT add formatting.
-
-Rules:
-1. KEEP the original capitalization of the first word. "Yes" stays "Yes", not "yes".
-2. NEVER lowercase words that are already capitalized correctly.
-3. Fix punctuation: add commas after introductory words, add missing periods.
-4. Fix misheard tech terms ONLY when obvious from context.
-5. NEVER rephrase, reorder, or restructure sentences.
-6. NEVER remove words the speaker said.
-7. NEVER change meaning.
-8. If the text is already correct, output it unchanged.
-
-Example 1:
-Input: "check the get ignore file for the repo"
-Output: "Check the .gitignore file for the repo."
-
-Example 2:
-Input: "we need to refactor the a p i endpoint"
-Output: "We need to refactor the API endpoint."
-
-Example 3:
-Input: "Yes, I see it now."
-Output: "Yes, I see it now."
-
-Example 4:
-Input: "Actually that won't work because of the bug."
-Output: "Actually, that won't work because of the bug."
-
-Example 5:
-Input: "I think the hard coded defaults changed."
-Output: "I think the hard-coded defaults changed."
-
-Key terms: <COMMA-SEPARATED LIST>
-Misheard words: <EACH ON ITS OWN LINE, format: "misheard phrase" should be "correct term">
-
-Input: "{{ transcript }}"
-Output:
+{INIT_TEMPLATE}\
 ```
 
-Important: The {{ transcript }} placeholder MUST appear exactly as shown (Jinja2 variable). \
-Keep the 5 standard examples. Key terms on a single comma-separated line. \
-Each misheard mapping on its own line. Keep the total prompt concise.
+Key terms go on a single comma-separated line. Each misheard mapping goes on its \
+own line with format: "misheard phrase" should be "correct term".
+
+Important: The {{{{ transcript }}}} placeholder MUST appear exactly as shown (Jinja2 variable). \
+Keep the 5 standard examples. Keep the total prompt concise.
 
 Step 5: Report the number of key terms and misheard mappings generated.
 """
