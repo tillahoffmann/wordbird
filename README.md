@@ -7,6 +7,8 @@ Contextual voice dictation for macOS. Powered by [NVIDIA Parakeet](https://huggi
 
 Press a hotkey, speak, and your words are transcribed and pasted into whatever app is focused. A small LLM post-processes the transcription to fix errors, using project-specific context from a `WORDBIRD.md` file.
 
+![demo video](demo.gif)
+
 ## Getting started
 
 Requires macOS on Apple Silicon (M1+) and Python 3.10+.
@@ -21,36 +23,26 @@ uvx wordbird stop
 uvx wordbird status
 ```
 
-## Architecture
-
-Wordbird runs as two sibling processes managed by a thin CLI:
-
-- **Server** (`wordbird-server`) — FastAPI app handling transcription, post-processing, history, config, and serving the React dashboard
-- **Daemon** (`wordbird-daemon`) — macOS-native process handling hotkeys, mic recording, overlay HUD, menu bar, and clipboard pasting
-
-The daemon sends recorded audio to the server via HTTP. The server runs ML inference in a thread pool so the dashboard stays responsive during transcription.
-
-```
-uvx wordbird          # starts both (recommended)
-uvx wordbird-server   # just the API server
-uvx wordbird-daemon   # just the daemon (expects server running)
-```
-
 ## Context-aware correction
 
-When dictating into **Terminal.app**, Wordbird detects the focused tab's working directory and looks for a `WORDBIRD.md` file up the directory tree. This lets you teach Wordbird your project's terms:
+You can improve transcription with a `WORDBIRD.md` file which lists project-specific terms that may be misheard.
+
+Either create a standard template, or ask Claude to analyze your project and create the file for you.
+
+```bash
+uvx wordbird init
+# or
+uvx wordbird init --claude # uses haiku by default; you can specify model via --claude {haiku,sonnet,opus}
+```
 
 Context detection works with:
 - **Terminal.app** — detects the focused tab's shell working directory
 - **VS Code / VS Code Insiders** — via the [Wordbird extension](https://marketplace.visualstudio.com/items?itemName=tillahoffmann.wordbird), which works with local and remote (SSH) workspaces
+- **Zed** - detects the focused window's project directory out of the box, no extension needed
 
 Transcription and pasting work in any app.
 
-```bash
-uvx wordbird init
-```
-
-This creates a `WORDBIRD.md` with the default prompt template. Edit it to add your project's terms:
+A `WORDBIRD.md` file looks like this:
 
 ```markdown
 ---
@@ -138,6 +130,21 @@ Wordbird needs three macOS permissions, granted to your terminal app:
 - ⌨️ **Input Monitoring** — to detect the global hotkey
 
 Wordbird checks these on startup and tells you what's missing.
+
+## Architecture
+
+Wordbird runs as two sibling processes managed by a thin CLI:
+
+- **Server** (`wordbird-server`) — FastAPI app handling transcription, post-processing, history, config, and serving the React dashboard
+- **Daemon** (`wordbird-daemon`) — macOS-native process handling hotkeys, mic recording, overlay HUD, menu bar, and clipboard pasting
+
+The daemon sends recorded audio to the server via HTTP. The server runs ML inference in a thread pool so the dashboard stays responsive during transcription.
+
+```
+uvx wordbird          # starts both (recommended)
+uvx wordbird-server   # just the API server
+uvx wordbird-daemon   # just the daemon (expects server running)
+```
 
 ## Development
 
