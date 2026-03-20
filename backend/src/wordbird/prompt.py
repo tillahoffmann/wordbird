@@ -93,6 +93,58 @@ Input: "{{ transcript }}"
 Output:
 """
 
+CLAUDE_INIT_PROMPT = f"""\
+Generate a WORDBIRD.md file in the current working directory, pre-populated with \
+project-specific terms discovered by analyzing the codebase.
+
+Step 1: Check if WORDBIRD.md already exists. If it does, read it and note its contents. \
+If it does not exist, proceed directly.
+
+Step 2: Explore the codebase. Read ~10-15 files to understand the project. Prioritize:
+1. Package manifests: pyproject.toml, package.json, Cargo.toml, go.mod, etc.
+2. README and docs
+3. Source file sampling: entry points, main modules, config files
+4. CI/CD and tooling: Makefile, Dockerfile, workflow files
+
+Step 3: Identify terms. Categorize into:
+
+Key terms (target: 15-40 terms) — only terms a speech-to-text model is likely to \
+get wrong or that are domain-specific: library/framework names, tool names, \
+project-specific names, acronyms, technical terms with unusual spelling.
+
+Misheard words (target: 5-15 mappings) — think phonetically about what a speech \
+model would produce. Common patterns:
+- Compound words split: "word bird" -> "wordbird", "git hub" -> "GitHub"
+- Spelled-out acronyms: "a p i" -> "API"
+- Sound-alikes: "pie test" -> "pytest", "numb pie" -> "NumPy"
+- Camel/pascal case split: "app kit" -> "AppKit"
+
+Step 4: Write WORDBIRD.md. Start from the default prompt template shown below, \
+then add your discovered terms. Replace the Jinja2 comment placeholders with \
+a "Key terms:" line and "Misheard words:" lines.
+
+Default prompt template:
+```
+{INIT_TEMPLATE}\
+```
+
+Key terms go on a single comma-separated line. Each misheard mapping goes on its \
+own line with format: "misheard phrase" should be "correct term".
+
+Important: The {{{{ transcript }}}} placeholder MUST appear exactly as shown (Jinja2 variable). \
+Keep the 5 standard examples. Keep the total prompt concise.
+
+Step 5: Report the number of key terms and misheard mappings generated.
+"""
+
+CLAUDE_INIT_TOOLS = [
+    "Read",
+    "Glob",
+    "Grep",
+    "Edit(WORDBIRD.md)",
+    "Write(WORDBIRD.md)",
+]
+
 
 def parse_wordbird_md(content: str) -> tuple[dict, str]:
     """Parse YAML front matter and body from a WORDBIRD.md file.

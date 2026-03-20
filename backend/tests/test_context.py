@@ -4,7 +4,11 @@ import json
 import os
 import sqlite3
 
-from wordbird.daemon.context import _get_zed_workspace, _read_editor_contexts, find_context_file
+from wordbird.daemon.context import (
+    _get_zed_workspace,
+    _read_editor_contexts,
+    find_context_file,
+)
 
 
 class TestFindContextFile:
@@ -95,7 +99,11 @@ class TestEditorContexts:
         path_b = ctx_dir / "other.json"
         path_b.write_text(
             json.dumps(
-                {"pid": pid, "workspace": "/home/user/proj-b", "wordbird_md": "same content"}
+                {
+                    "pid": pid,
+                    "workspace": "/home/user/proj-b",
+                    "wordbird_md": "same content",
+                }
             )
         )
 
