@@ -282,12 +282,12 @@ class Daemon:
 
         self._submit_after = submit
         print("   ⏹️  Stopped recording.")
-        self.highlight.hide()
         self._restore_mute()
         wav_bytes, duration = self.recorder.stop()
 
         if not wav_bytes:
             print("   ⚠️  No audio captured.")
+            self.highlight.hide()
             self.menubar.set_state(State.IDLE)
             self.overlay.hide()
             return
@@ -387,6 +387,7 @@ class Daemon:
 
                 time.sleep(0.05)
                 press_return()
+            self.highlight.hide()
             self.overlay.show_done(word_count)
 
             # Save audio if enabled
@@ -438,6 +439,7 @@ class Daemon:
         except Exception as e:
             if not self._cancelled:
                 print(f"   ❌ Transcription error: {e}")
+                self.highlight.hide()
                 self.overlay.show_error("Transcription failed")
         finally:
             self._transcribing = False
