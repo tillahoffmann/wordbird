@@ -7,7 +7,7 @@ Contextual voice dictation for macOS. Powered by [NVIDIA Parakeet](https://huggi
 
 Press a hotkey, speak, and your words are transcribed and pasted into whatever app is focused. A small LLM post-processes the transcription to fix errors, using project-specific context from a `WORDBIRD.md` file.
 
-![demo video](demo.gif)
+![demo video](https://raw.githubusercontent.com/tillahoffmann/wordbird/main/demo.gif)
 
 ## Getting started
 
