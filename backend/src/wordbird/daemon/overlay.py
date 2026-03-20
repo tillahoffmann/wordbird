@@ -2,6 +2,7 @@
 
 import collections
 import math
+import re
 
 import Foundation
 import objc
@@ -380,15 +381,42 @@ HIGHLIGHT_INSET = 1  # inset so the border sits just inside the window edge
 
 
 def _frontmost_window_bounds():
-    """Return (x, y, w, h) in AppKit coords for the frontmost app's key window.
+    """Return (x, cg_y, w, h, appkit_y) for the focused window.
 
+    Uses the Accessibility API to get the actual focused window (correct
+    when an app has multiple windows), falling back to CGWindowList.
     Returns None if the window cannot be determined.
     """
+    from ApplicationServices import (
+        AXUIElementCopyAttributeValue,
+        AXUIElementCreateApplication,
+    )
+
     app = NSWorkspace.sharedWorkspace().frontmostApplication()
     if app is None:
         return None
     pid = app.processIdentifier()
+    screen_h = NSScreen.mainScreen().frame().size.height
 
+    # Preferred: Accessibility API — gives us the actual focused window
+    try:
+        app_ref = AXUIElementCreateApplication(pid)
+        err, focused = AXUIElementCopyAttributeValue(app_ref, "AXFocusedWindow", None)
+        if err == 0 and focused:
+            err_p, pos_val = AXUIElementCopyAttributeValue(focused, "AXPosition", None)
+            err_s, size_val = AXUIElementCopyAttributeValue(focused, "AXSize", None)
+            if err_p == 0 and err_s == 0:
+                # Parse AXValue description (AXValueGetValue doesn't work in PyObjC)
+                pm = re.search(r"x:([-\d.]+)\s+y:([-\d.]+)", str(pos_val))
+                sm = re.search(r"w:([-\d.]+)\s+h:([-\d.]+)", str(size_val))
+                if pm and sm:
+                    x, y = float(pm.group(1)), float(pm.group(2))
+                    w, h = float(sm.group(1)), float(sm.group(2))
+                    return (x, y, w, h, screen_h - y - h)
+    except Exception:
+        pass
+
+    # Fallback: CGWindowList — first layer-0 window for this PID
     windows = Quartz.CGWindowListCopyWindowInfo(
         Quartz.kCGWindowListOptionOnScreenOnly
         | Quartz.kCGWindowListExcludeDesktopElements,
@@ -401,11 +429,8 @@ def _frontmost_window_bounds():
         if w.get("kCGWindowOwnerPID") == pid and w.get("kCGWindowLayer", -1) == 0:
             b = w.get("kCGWindowBounds")
             if b:
-                # Convert CoreGraphics (top-left origin) to AppKit (bottom-left origin)
-                screen_h = NSScreen.mainScreen().frame().size.height
                 x, y, width, height = b["X"], b["Y"], b["Width"], b["Height"]
-                appkit_y = screen_h - y - height
-                return (x, y, width, height, appkit_y)
+                return (x, y, width, height, screen_h - y - height)
     return None
 
 
