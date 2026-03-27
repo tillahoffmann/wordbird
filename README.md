@@ -37,6 +37,7 @@ uvx wordbird init --claude # uses haiku by default; you can specify model via --
 
 Context detection works with:
 - **Terminal.app** — detects the focused tab's shell working directory
+- **iTerm2** — detects the focused session's shell working directory
 - **VS Code / VS Code Insiders** — via the [Wordbird extension](https://marketplace.visualstudio.com/items?itemName=tillahoffmann.wordbird), which works with local and remote (SSH) workspaces
 - **Zed** - detects the focused window's project directory out of the box, no extension needed
 

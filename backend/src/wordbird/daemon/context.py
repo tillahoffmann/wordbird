@@ -24,6 +24,42 @@ def get_frontmost_app() -> tuple[str, str]:
     return (app.bundleIdentifier() or "", app.localizedName() or "")
 
 
+def _cwd_from_tty(tty_name: str) -> str | None:
+    """Given a tty device path, find the shell's cwd via ps + lsof."""
+    tty_short = tty_name.replace("/dev/", "")
+
+    ps = subprocess.run(
+        ["ps", "-t", tty_short, "-o", "pid=,comm="],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if ps.returncode != 0:
+        return None
+
+    pid = None
+    for line in ps.stdout.strip().splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and any(sh in parts[-1] for sh in ("zsh", "bash", "fish")):
+            pid = parts[0]
+            break
+
+    if pid is None:
+        return None
+
+    lsof = subprocess.run(
+        ["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    for line in lsof.stdout.strip().splitlines():
+        if line.startswith("n/"):
+            return line[1:]
+
+    return None
+
+
 def get_terminal_cwd() -> str | None:
     """Get the cwd of the shell in the frontmost Terminal.app tab."""
     try:
@@ -40,42 +76,34 @@ def get_terminal_cwd() -> str | None:
         if tty.returncode != 0 or not tty.stdout.strip():
             return None
 
-        tty_name = tty.stdout.strip()
-        tty_short = tty_name.replace("/dev/", "")
-
-        ps = subprocess.run(
-            ["ps", "-t", tty_short, "-o", "pid=,comm="],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if ps.returncode != 0:
-            return None
-
-        pid = None
-        for line in ps.stdout.strip().splitlines():
-            parts = line.split()
-            if len(parts) >= 2 and any(
-                sh in parts[-1] for sh in ("zsh", "bash", "fish")
-            ):
-                pid = parts[0]
-                break
-
-        if pid is None:
-            return None
-
-        lsof = subprocess.run(
-            ["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        for line in lsof.stdout.strip().splitlines():
-            if line.startswith("n/"):
-                return line[1:]
+        return _cwd_from_tty(tty.stdout.strip())
 
     except Exception:
         logger.debug("Failed to detect Terminal.app cwd", exc_info=True)
+
+    return None
+
+
+def get_iterm_cwd() -> str | None:
+    """Get the cwd of the shell in the frontmost iTerm2 session."""
+    try:
+        tty = subprocess.run(
+            [
+                "osascript",
+                "-e",
+                'tell application "iTerm2" to tty of current session of current window',
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if tty.returncode != 0 or not tty.stdout.strip():
+            return None
+
+        return _cwd_from_tty(tty.stdout.strip())
+
+    except Exception:
+        logger.debug("Failed to detect iTerm2 cwd", exc_info=True)
 
     return None
 
@@ -288,8 +316,11 @@ def get_context() -> tuple[str, str | None, str | None]:
     cwd = None
     context_content = None
 
-    if bundle_id == "com.apple.Terminal":
-        cwd = get_terminal_cwd()
+    if bundle_id in ("com.apple.Terminal", "com.googlecode.iterm2"):
+        if bundle_id == "com.apple.Terminal":
+            cwd = get_terminal_cwd()
+        else:
+            cwd = get_iterm_cwd()
         if cwd:
             context_file = find_context_file(cwd)
             if context_file:
