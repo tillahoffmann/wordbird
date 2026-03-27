@@ -40,9 +40,7 @@ def _cwd_from_tty(tty_name: str) -> str | None:
     pid = None
     for line in ps.stdout.strip().splitlines():
         parts = line.split()
-        if len(parts) >= 2 and any(
-            sh in parts[-1] for sh in ("zsh", "bash", "fish")
-        ):
+        if len(parts) >= 2 and any(sh in parts[-1] for sh in ("zsh", "bash", "fish")):
             pid = parts[0]
             break
 
@@ -93,8 +91,7 @@ def get_iterm_cwd() -> str | None:
             [
                 "osascript",
                 "-e",
-                "tell application \"iTerm2\" to tty of current session"
-                " of current window",
+                'tell application "iTerm2" to tty of current session of current window',
             ],
             capture_output=True,
             text=True,
