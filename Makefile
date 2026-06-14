@@ -38,10 +38,11 @@ dev:
 	@bash -c '\
 	cleanup() { kill -INT 0 2>/dev/null; sleep 1; kill -9 0 2>/dev/null; exit 0; }; \
 	trap cleanup INT TERM; \
+	rm -f "$$HOME/.wordbird/server.json"; \
 	echo "Starting backend on http://127.0.0.1:7870"; \
 	echo "Starting frontend on http://localhost:5173"; \
 	echo "Starting daemon..."; \
 	(cd backend && uv run uvicorn wordbird.server.server:app --factory --reload --host 127.0.0.1 --port 7870) & \
 	(cd frontend && npm run dev) & \
-	sleep 3 && (cd backend && uv run wordbird-daemon) & \
+	(cd backend && uv run wordbird-daemon) & \
 	wait'
