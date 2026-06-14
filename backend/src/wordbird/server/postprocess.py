@@ -75,6 +75,22 @@ class PostProcessor:
         self._loaded_model_id = model_id
         print("   ✨ Post-processor ready.")
 
+    def unload(self):
+        """Release the model and free GPU memory."""
+        if self._loaded_model_id is None:
+            return
+        print("   ✨ Unloading post-processor...")
+        import gc
+
+        import mlx.core as mx
+
+        mx.synchronize()
+        self._model = None
+        self._tokenizer = None
+        self._loaded_model_id = None
+        gc.collect()
+        mx.clear_cache()
+
     def fix(
         self,
         text: str,

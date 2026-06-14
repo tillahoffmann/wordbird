@@ -63,6 +63,43 @@ class TestConfig:
         assert cfg["modifier_key"] == "lalt"
         assert cfg["toggle_key"] == "return"
 
+    def test_put_disable_fix_unloads_model(self, client, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            "wordbird.server.postprocess.PostProcessor.load",
+            lambda self, model_id=None: calls.append(("load", model_id)),
+        )
+        monkeypatch.setattr(
+            "wordbird.server.postprocess.PostProcessor.unload",
+            lambda self: calls.append(("unload", None)),
+        )
+
+        # Load the post-processor first so there is something to unload.
+        client.post("/api/models/postprocess/load")
+        calls.clear()
+
+        resp = client.put("/api/config", json={"no_fix": True})
+        assert resp.status_code == 200
+        assert ("unload", None) in calls
+
+    def test_put_enable_fix_loads_model(self, client, monkeypatch, tmp_path):
+        import tomli_w
+
+        # Start with post-processing disabled.
+        (tmp_path / "wordbird.toml").write_bytes(
+            tomli_w.dumps({"no_fix": True}).encode()
+        )
+
+        calls = []
+        monkeypatch.setattr(
+            "wordbird.server.postprocess.PostProcessor.load",
+            lambda self, model_id=None: calls.append(("load", model_id)),
+        )
+
+        resp = client.put("/api/config", json={"no_fix": False})
+        assert resp.status_code == 200
+        assert any(c[0] == "load" for c in calls)
+
 
 class TestTranscriptions:
     def test_list_empty(self, client):
