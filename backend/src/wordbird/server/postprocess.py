@@ -1,8 +1,10 @@
 """Post-process transcription output using a small local LLM."""
 
+import gc
 from html.parser import HTMLParser
 
 import jinja2
+import mlx.core as mx
 from markdown_it import MarkdownIt
 from mlx_lm import generate, load
 
@@ -61,15 +63,14 @@ class PostProcessor:
         if self._loaded_model_id == model_id:
             return
         print(f"   ✨ Loading post-processor ({model_id})...")
-        import gc
-
-        import mlx.core as mx
-
         mx.synchronize()
         self._model = None
         self._tokenizer = None
         gc.collect()
         mx.clear_cache()
+        # Cap MLX's buffer cache so it can't grow unbounded over a long-lived
+        # session (the cache is retained, not freed, while the model stays loaded).
+        mx.set_cache_limit(2 * 1024**3)
         result = load(model_id)
         self._model, self._tokenizer = result[0], result[1]
         self._loaded_model_id = model_id
@@ -80,10 +81,6 @@ class PostProcessor:
         if self._loaded_model_id is None:
             return
         print("   ✨ Unloading post-processor...")
-        import gc
-
-        import mlx.core as mx
-
         mx.synchronize()
         self._model = None
         self._tokenizer = None
@@ -132,6 +129,11 @@ class PostProcessor:
             max_tokens=len(text.split()) * 3,
             verbose=False,
         )
+
+        # Return MLX's scratch/activation cache to the system. Without this, the
+        # cache ratchets up across runs and never shrinks while the model stays
+        # loaded (Apple Silicon unified memory).
+        mx.clear_cache()
 
         result = result.strip()
 

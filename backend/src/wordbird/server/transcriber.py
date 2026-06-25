@@ -1,7 +1,11 @@
 """Speech-to-text transcription using Parakeet via mlx-audio."""
 
+import gc
 import os
 import tempfile
+
+import mlx.core as mx
+from mlx_audio.stt.utils import load_model
 
 from wordbird.prompt import DEFAULT_TRANSCRIPTION_MODEL
 
@@ -17,21 +21,18 @@ class Transcriber:
 
     def load(self, model_id: str | None = None):
         """Load (or reload) the transcription model."""
-        from mlx_audio.stt.utils import load_model
-
         model_id = model_id or self._default_model_id
         if self._loaded_model_id == model_id:
             return
 
         print(f"   🧠 Loading transcription model ({model_id})...")
-        import gc
-
-        import mlx.core as mx
-
         mx.synchronize()
         self._model = None
         gc.collect()
         mx.clear_cache()
+        # Cap MLX's buffer cache so it can't grow unbounded over a long-lived
+        # session (the cache is retained, not freed, while the model stays loaded).
+        mx.set_cache_limit(2 * 1024**3)
         self._model = load_model(model_id)
         self._loaded_model_id = model_id
         print("   🧠 Transcription model ready.")
@@ -52,3 +53,7 @@ class Transcriber:
             return result.text.strip()
         finally:
             os.unlink(tmp_path)
+            # Return MLX's scratch/activation cache to the system. Without this,
+            # the cache ratchets up across runs and never shrinks while the model
+            # stays loaded (Apple Silicon unified memory).
+            mx.clear_cache()
