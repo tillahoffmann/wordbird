@@ -5576,7 +5576,7 @@ wheels = [
 
 [[package]]
 name = "wordbird"
-version = "0.9.1"
+version = "0.10.1"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

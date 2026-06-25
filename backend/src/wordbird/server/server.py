@@ -161,15 +161,29 @@ def create_app() -> FastAPI:
         }
 
     @app.put("/api/config")
-    def save_config(update: ConfigUpdate):
+    async def save_config(update: ConfigUpdate):
         import tomli_w
 
         bw_config.ensure_data_dir()
+        prev_no_fix = _get_effective_config().get("no_fix", False)
+
         # Only write values that differ from defaults
         data = update.model_dump(exclude_none=True)
         overrides = {k: v for k, v in data.items() if v != DEFAULTS.get(k)}
         with open(bw_config.CONFIG_PATH, "wb") as f:
             tomli_w.dump(overrides, f)
+
+        # React to a change in post-processing: free the model when disabled,
+        # load it when re-enabled (as if it had been active at startup).
+        new_no_fix = _get_effective_config().get("no_fix", False)
+        if new_no_fix != prev_no_fix:
+            if new_no_fix:
+                if _ml_state["postprocessor"] is not None:
+                    await _run_ml(_ml_state["postprocessor"].unload)
+            else:
+                pp = _get_postprocessor()
+                await _run_ml(pp.load, _get_effective_config().get("fix_model"))
+
         return {"ok": True}
 
     @app.get("/api/transcriptions")

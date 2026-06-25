@@ -3,6 +3,7 @@
 import io
 import signal
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -534,13 +535,25 @@ class Daemon:
         self.overlay.setup()
         self.highlight.setup()
 
-        # Verify the server is reachable before accepting hotkeys
-        print(f"\n   🔗 Checking server at {self._server_url}...")
-        try:
-            resp = httpx.get(f"{self._server_url}/api/health", timeout=5)
-            resp.raise_for_status()
-        except Exception as e:
-            print(f"   ❌ Server not reachable: {e}")
+        # Wait for the server to become reachable before accepting hotkeys.
+        # The server binds its socket only after preloading ML models, which on
+        # a cold start (first model download) can take well over a minute, so we
+        # poll rather than relying on a single long timeout.
+        print(f"\n   🔗 Waiting for server at {self._server_url}...")
+        deadline = time.monotonic() + 180
+        ready = False
+        last_error: Exception | None = None
+        while time.monotonic() < deadline:
+            try:
+                resp = httpx.get(f"{self._server_url}/api/health", timeout=2)
+                resp.raise_for_status()
+                ready = True
+                break
+            except Exception as e:
+                last_error = e
+                time.sleep(1)
+        if not ready:
+            print(f"   ❌ Server not reachable: {last_error}")
             print("   Start the server first with: make backend-dev")
             self.overlay.show_error("Server not reachable")
             return
